@@ -1,8 +1,11 @@
 using CenteralES.Infrastructure.Postgres;
+using CenteralES.Infrastructure.PdfStampRecognition;
 using CenteralES.Infrastructure.Processing;
+using CenteralES.PdfStampRecognition;
 using CenteralES.Processing.Queue;
 using CenteralES.Storage;
 using Npgsql;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +17,7 @@ await databaseBootstrapper.EnsureDatabaseAsync(processingDatabaseConnectionStrin
 
 builder.Services.AddSingleton(NpgsqlDataSource.Create(processingDatabaseConnectionString));
 builder.Services.AddSingleton<IProcessingJobQueue, PostgresProcessingJobQueue>();
+builder.Services.AddSingleton<IPdfStampRecognitionResultStore, PostgresPdfStampRecognitionResultStore>();
 
 var app = builder.Build();
 
@@ -37,6 +41,7 @@ app.MapGet("/health/ready", () =>
 app.MapPost("/api/pdf-stamp-recognition/jobs", async (
     HttpRequest request,
     IProcessingJobQueue queue,
+    IPdfStampRecognitionResultStore resultStore,
     CancellationToken cancellationToken) =>
 {
     if (!request.HasFormContentType)
@@ -54,6 +59,13 @@ app.MapPost("/api/pdf-stamp-recognition/jobs", async (
 
     await using var stream = file.OpenReadStream();
     var hash = await ContentHash.ComputeSha256Async(stream, cancellationToken);
+
+    var existingResult = await resultStore.GetByHashAsync(hash, cancellationToken);
+    if (existingResult is not null)
+    {
+        return Results.Ok(ToPdfResultResponse(existingResult));
+    }
+
     var temporaryFileKey = $"incoming/{hash.Replace("sha256:", string.Empty, StringComparison.Ordinal)}.pdf";
     var enqueueResult = await queue.EnqueueAsync(
         new CreateProcessingJobCommand("pdf-stamp-recognition", hash, temporaryFileKey, DateTimeOffset.UtcNow),
@@ -71,8 +83,16 @@ app.MapPost("/api/pdf-stamp-recognition/jobs", async (
 .DisableAntiforgery()
 .WithName("CreatePdfStampRecognitionJob");
 
-app.MapGet("/api/pdf-stamp-recognition/results/{hash}", (string hash) =>
-    Results.NotFound(ApiErrorResponse.Create("result_not_found", $"No result or active processing found for hash '{hash}'.")))
+app.MapGet("/api/pdf-stamp-recognition/results/{hash}", async (
+    string hash,
+    IPdfStampRecognitionResultStore resultStore,
+    CancellationToken cancellationToken) =>
+{
+    var result = await resultStore.GetByHashAsync(hash, cancellationToken);
+    return result is null
+        ? Results.NotFound(ApiErrorResponse.Create("result_not_found", $"No result or active processing found for hash '{hash}'."))
+        : Results.Ok(ToPdfResultResponse(result));
+})
     .WithName("GetPdfStampRecognitionResult");
 
 app.MapGet("/api/jobs/{jobId}", (string jobId) =>
@@ -124,6 +144,18 @@ static string ToPublicStatus(CenteralES.Processing.ProcessingJobStatus status)
     };
 }
 
+static PdfResultResponse ToPdfResultResponse(PdfStampRecognitionResult result)
+{
+    using var payload = JsonDocument.Parse(result.PayloadJson);
+
+    return new PdfResultResponse(
+        result.ContentHash,
+        result.JobId.ToString("N"),
+        "completed",
+        result.ContractVersion,
+        payload.RootElement.Clone());
+}
+
 internal sealed record HealthResponse(string Status, DateTimeOffset CheckedAt);
 
 internal sealed record PdfJobResponse(
@@ -132,6 +164,13 @@ internal sealed record PdfJobResponse(
     int AttemptNumber,
     string Status,
     bool Deduplicated);
+
+internal sealed record PdfResultResponse(
+    string Hash,
+    string JobId,
+    string Status,
+    string ContractVersion,
+    JsonElement Result);
 
 internal sealed record ApiErrorResponse(ApiError Error)
 {

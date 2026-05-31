@@ -153,6 +153,83 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         return claimed;
     }
 
+    public async Task CompleteAsync(CompleteProcessingJobCommand command, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        await using var updateJob = new NpgsqlCommand("""
+            update processing_jobs
+            set status = 'completed',
+                finished_at = @finished_at,
+                updated_at = @finished_at
+            where id = @job_id;
+            """, connection, transaction);
+        updateJob.Parameters.AddWithValue("finished_at", command.FinishedAt);
+        updateJob.Parameters.AddWithValue("job_id", command.JobId);
+        await updateJob.ExecuteNonQueryAsync(cancellationToken);
+
+        await UpsertDiagnosticsAsync(connection, transaction, command.JobId, command.Diagnostics, command.FinishedAt, cancellationToken);
+
+        await using var updateSubject = new NpgsqlCommand("""
+            update processing_subjects
+            set state = 'completed',
+                result_id = @result_id,
+                updated_at = @finished_at
+            where id = @subject_id;
+            """, connection, transaction);
+        updateSubject.Parameters.AddWithValue("result_id", command.ResultId);
+        updateSubject.Parameters.AddWithValue("finished_at", command.FinishedAt);
+        updateSubject.Parameters.AddWithValue("subject_id", command.SubjectId);
+        await updateSubject.ExecuteNonQueryAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task FailAsync(FailProcessingJobCommand command, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        var status = command.Final ? "blocked" : "failed";
+
+        await using var updateJob = new NpgsqlCommand("""
+            update processing_jobs
+            set status = @status,
+                finished_at = @finished_at,
+                updated_at = @finished_at
+            where id = @job_id;
+            """, connection, transaction);
+        updateJob.Parameters.AddWithValue("status", status);
+        updateJob.Parameters.AddWithValue("finished_at", command.FinishedAt);
+        updateJob.Parameters.AddWithValue("job_id", command.JobId);
+        await updateJob.ExecuteNonQueryAsync(cancellationToken);
+
+        var diagnostics = command.Diagnostics with
+        {
+            NormalizedError = command.Error,
+            Retryable = ProcessorErrorClassifier.Classify(command.Error).IsRetryable
+        };
+        await UpsertDiagnosticsAsync(connection, transaction, command.JobId, diagnostics, command.FinishedAt, cancellationToken);
+
+        await using var updateSubject = new NpgsqlCommand("""
+            update processing_subjects
+            set state = @status,
+                updated_at = @finished_at
+            where id = @subject_id;
+            """, connection, transaction);
+        updateSubject.Parameters.AddWithValue("status", status);
+        updateSubject.Parameters.AddWithValue("finished_at", command.FinishedAt);
+        updateSubject.Parameters.AddWithValue("subject_id", command.SubjectId);
+        await updateSubject.ExecuteNonQueryAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     private static async Task<ExistingSubject?> FindSubjectAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
@@ -227,4 +304,61 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         Guid? CurrentJobId,
         int? CurrentAttemptNumber,
         string? CurrentJobStatus);
+
+    private static async Task UpsertDiagnosticsAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid jobId,
+        AttemptDiagnostics diagnostics,
+        DateTimeOffset createdAt,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new NpgsqlCommand("""
+            insert into processing_attempt_diagnostics (
+                job_id,
+                endpoint,
+                duration_ms,
+                http_status,
+                normalized_error_code,
+                retryable,
+                raw_error_excerpt,
+                correlation_id,
+                created_at)
+            values (
+                @job_id,
+                @endpoint,
+                @duration_ms,
+                @http_status,
+                @normalized_error_code,
+                @retryable,
+                @raw_error_excerpt,
+                @correlation_id,
+                @created_at)
+            on conflict (job_id) do update
+            set endpoint = excluded.endpoint,
+                duration_ms = excluded.duration_ms,
+                http_status = excluded.http_status,
+                normalized_error_code = excluded.normalized_error_code,
+                retryable = excluded.retryable,
+                raw_error_excerpt = excluded.raw_error_excerpt,
+                correlation_id = excluded.correlation_id,
+                created_at = excluded.created_at;
+            """, connection, transaction);
+        command.Parameters.AddWithValue("job_id", jobId);
+        command.Parameters.AddWithValue("endpoint", (object?)diagnostics.Endpoint ?? DBNull.Value);
+        command.Parameters.AddWithValue("duration_ms", (object?)ToDurationMilliseconds(diagnostics.Duration) ?? DBNull.Value);
+        command.Parameters.AddWithValue("http_status", (object?)diagnostics.HttpStatus ?? DBNull.Value);
+        command.Parameters.AddWithValue("normalized_error_code", (object?)diagnostics.NormalizedError?.ToString() ?? DBNull.Value);
+        command.Parameters.AddWithValue("retryable", (object?)diagnostics.Retryable ?? DBNull.Value);
+        command.Parameters.AddWithValue("raw_error_excerpt", (object?)diagnostics.RawErrorExcerpt ?? DBNull.Value);
+        command.Parameters.AddWithValue("correlation_id", diagnostics.CorrelationId);
+        command.Parameters.AddWithValue("created_at", createdAt);
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static int? ToDurationMilliseconds(TimeSpan? duration)
+    {
+        return duration is null ? null : Convert.ToInt32(duration.Value.TotalMilliseconds);
+    }
 }

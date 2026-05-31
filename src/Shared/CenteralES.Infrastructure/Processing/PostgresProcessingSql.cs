@@ -60,6 +60,14 @@ public static class PostgresProcessingSql
             created_at timestamptz not null,
             unique (capability, content_hash)
         );
+
+        create table if not exists pdf_stamp_recognition_results (
+            id uuid primary key,
+            result_index_id uuid not null references processing_result_index(id),
+            payload_json jsonb not null,
+            contract_version text not null,
+            created_at timestamptz not null
+        );
         """;
 
     public const string ClaimNext = """

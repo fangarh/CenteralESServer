@@ -52,6 +52,7 @@ These facts are discovery tasks inside Phase 1, not blockers for GSD planning.
 - 2026-05-31: PostgreSQL queue contracts and initial schema SQL added, including `FOR UPDATE SKIP LOCKED` claim query and separate attempt diagnostics/result index tables.
 - 2026-05-31: `db.env` is ignored by Git; PostgreSQL connection verified; target database bootstrapped; `PostgresProcessingJobQueue` implemented and covered by a real DB integration test.
 - 2026-05-31: Web `POST /api/pdf-stamp-recognition/jobs` now uses `PostgresProcessingJobQueue`; app startup resolves local `db.env` or configured connection string and applies schema.
+- 2026-05-31: Worker claim -> fake pdf recognizer -> PostgreSQL result store -> queue complete flow added; Web can return cached result by hash; real DB integration test covers save/read/complete.
 
 ## Workflow Rules
 
@@ -61,4 +62,4 @@ These facts are discovery tasks inside Phase 1, not blockers for GSD planning.
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-05-31 after Phase 1 implementation start*
+*Last updated: 2026-05-31 after Worker fake result-flow checkpoint*
