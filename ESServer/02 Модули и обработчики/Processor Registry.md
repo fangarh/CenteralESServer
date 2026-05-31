@@ -52,7 +52,7 @@ capability: pdf-stamp-recognition
 type: ExternalHttpProcessor
 adapter: Pdf2TxtHttpProcessorAdapter
 resultStore: PdfStampRecognitionResultStore
-settingsSchema: endpoint, timeout, maxAttempts, concurrencyLimit
+settingsSchema: endpointPool, timeout, maxAttempts, poolConcurrencyLimit, endpointConcurrencyLimit
 ```
 
 ### Processor Instance
@@ -64,12 +64,18 @@ settingsSchema: endpoint, timeout, maxAttempts, concurrencyLimit
 ```text
 processorKey: pdf2txt-http-recognizer
 enabled: true
-endpoint: https://pdf2txt.selectel.dt1520.ru/recognize_json/
+endpointPool:
+  - https://pdf2txt-1.local/recognize_json/
+  - https://pdf2txt-2.local/recognize_json/
+  - https://pdf2txt-3.local/recognize_json/
 timeout: 10 minutes
-concurrencyLimit: 3
+poolConcurrencyLimit: 6
+endpointConcurrencyLimit: 2
 maxAttempts: 5
 afterMaxAttempts: admin_required
 ```
+
+Если внешний сервис развёрнут несколькими одинаковыми Docker-контейнерами, это не создаёт несколько разных processor-ов. Это один processor instance с несколькими endpoint-ами в pool.
 
 ## Где что хранится
 
@@ -87,10 +93,11 @@ afterMaxAttempts: admin_required
 В БД:
 
 - enabled/disabled;
-- endpoint;
+- endpoint или endpoint pool;
 - timeout;
 - retry policy;
-- concurrency limit;
+- общий concurrency limit pool-а;
+- per-endpoint concurrency limit;
 - credentials/license refs;
 - health status;
 - last error;
@@ -113,11 +120,22 @@ afterMaxAttempts: admin_required
 ```text
 Job требует capability
   -> Registry ищет активный Processor Instance
-  -> Orchestrator проверяет enabled/health/concurrency
+  -> Orchestrator проверяет enabled/health/concurrency pool-а
+  -> Endpoint selector выбирает endpoint из pool-а
   -> Worker получает adapter
-  -> Adapter выполняет обработку
+  -> Adapter выполняет обработку через выбранный endpoint
   -> ResultStore сохраняет результат
 ```
+
+Для MVP алгоритм выбора endpoint-а в pool:
+
+```text
+least in-flight среди enabled и healthy/unknown endpoint-ов
+```
+
+Weighted round-robin, приоритеты и сложные веса откладываются. Если все endpoint-ы заняты или unhealthy, job возвращается в очередь с коротким delay. Если endpoint падает во время attempt, падает только attempt; следующий retry может выбрать другой endpoint.
+
+Выбранный endpoint фиксируется в истории attempt, чтобы админка и support report могли показать, на каком endpoint-е произошла ошибка.
 
 ## Что видит администратор
 
@@ -131,7 +149,10 @@ Job требует capability
 - статус здоровья;
 - последнюю ошибку понятным текстом;
 - лимиты;
-- endpoint или источник обработки;
+- endpoint pool или источник обработки;
+- количество endpoint-ов;
+- health каждого endpoint-а;
+- текущий in-flight по pool и по endpoint;
 - кнопки: включить, выключить, проверить, открыть очередь, retry.
 
 Runtime-настройки processor instance управляются через страницу компонента в админке.
@@ -142,9 +163,11 @@ Runtime-настройки processor instance управляются через 
 
 ```text
 endpoint
+endpoint pool
 timeout
 retry policy
-concurrency limit
+pool concurrency limit
+endpoint concurrency limit
 enabled/disabled
 credentials/license refs
 ```
@@ -169,6 +192,16 @@ Optional diagnostic test
 
 Диагностический тест не должен создавать обычную пользовательскую job и не должен подменять клиент ЭП.
 
+Для внешних чёрных ящиков без отдельного health endpoint Registry должен поддерживать осторожную модель состояния:
+
+- `config valid`: настройки заполнены и проходят локальную валидацию;
+- `passive health`: состояние выводится из последних реальных вызовов processor-а;
+- `manual diagnostic`: ручной тест доступен только при явно описанном безопасном сценарии;
+- `unknown`: сервис ещё не проверялся или контракт диагностического теста не подтверждён;
+- `unreachable`: сетевой вызов недоступен или завершился timeout-ом.
+
+Если для внешнего сервиса можно безопасно отправить заведомо невалидный вход, например нулевой файл, это оформляется как `InvalidInputProbe`. Такой probe считается успешным только при заранее зафиксированном ожидаемом validation error. До проверки фактического ответа внешнего сервиса этот режим остаётся гипотезой, а не обязательной частью MVP.
+
 ## Ошибки Registry
 
 Типовые ситуации:
@@ -181,3 +214,5 @@ Optional diagnostic test
 - превышен лимит параллельности.
 
 Эти ситуации должны возвращать понятные статусы в API и понятные сообщения в админке.
+
+Если превышен лимит параллельности endpoint pool-а, это классифицируется как `processor_overloaded`. Такая ситуация не создаёт failed attempt: job остаётся в очереди или получает короткий delay.

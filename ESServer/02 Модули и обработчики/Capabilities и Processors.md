@@ -69,17 +69,22 @@ Processor D:
 
 `Processor Instance` — это настроенный экземпляр processor в конкретной поставке.
 
+Для внешнего HTTP processor-а instance может быть пулом endpoint-ов одного сервиса. Например, `pdf2txt-http-recognizer` может быть развёрнут в пяти Docker-контейнерах, а в админке для него будут прописаны пять endpoint-ов. Это остаётся одним processor instance, потому что все endpoint-ы выполняют один и тот же контракт.
+
 Он содержит:
 
 - включён или выключен;
-- endpoint;
+- endpoint или пул endpoint-ов;
 - ключи или license-настройки;
 - timeout;
-- лимит параллельности;
+- общий лимит параллельности;
+- лимит параллельности на endpoint, если используется пул;
 - retry policy;
 - health status;
 - последнюю ошибку;
 - runtime-настройки.
+
+Для endpoint pool Worker выбирает endpoint на момент выполнения attempt. Выбранный endpoint сохраняется в истории attempt для диагностики и audit.
 
 ## Почему это важно
 
@@ -154,7 +159,8 @@ Processor Type:
 
 Runtime Settings:
   licenseKeyRef
-  endpoint
-  concurrencyLimit
+  endpoint or endpointPool
+  poolConcurrencyLimit
+  endpointConcurrencyLimit
   timeout
 ```

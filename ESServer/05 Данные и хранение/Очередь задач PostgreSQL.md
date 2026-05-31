@@ -65,6 +65,7 @@ heartbeat_at
 processor_instance_id
 error_code
 error_message
+error_is_retryable
 created_at
 updated_at
 ```
@@ -119,8 +120,11 @@ queued
 processing
 completed
 failed
+blocked
 cancelled
 ```
+
+`blocked` означает, что лимит retry исчерпан и нужна ручная операция администратора. Наружу это отдельный статус, а не обычный `failed`, чтобы клиент ЭП не пытался бесконечно ждать или перезапускать обработку.
 
 Внутренние статусы:
 
@@ -135,11 +139,24 @@ abandoned
 
 Так как обработка может длиться больше 5 минут, worker должен обновлять heartbeat.
 
+Baseline MVP:
+
+```text
+heartbeat interval: 30 seconds
+stale heartbeat threshold: 3 minutes
+```
+
 Если heartbeat давно не обновлялся:
 
 - job считается abandoned;
 - orchestrator решает, можно ли retry;
 - админка показывает проблему.
+
+Если все endpoint-ы processor pool заняты по concurrency limit, это не считается failed attempt. Job остаётся в очереди или получает короткий `scheduled_at` delay:
+
+```text
+default delay: 10-30 seconds
+```
 
 ## Индексы
 

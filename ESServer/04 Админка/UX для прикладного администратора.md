@@ -107,6 +107,7 @@ correlationId
 processor key
 capability key
 endpoint
+endpoint pool
 HTTP status
 raw error
 stack trace
@@ -122,7 +123,7 @@ SQL/storage diagnostic summary
 Каждая проблема должна вести к действию:
 
 - обработчик недоступен -> проверить health;
-- endpoint неверный -> открыть настройки;
+- endpoint или endpoint pool неверный -> открыть настройки;
 - job упала -> открыть attempts;
 - исчерпаны retry -> manual retry;
 - storage заполнен -> открыть storage;
@@ -136,7 +137,7 @@ SQL/storage diagnostic summary
 - rotate API key;
 - удалить временные файлы;
 - повторно запустить failed job;
-- изменить endpoint;
+- изменить endpoint или endpoint pool;
 - изменить retry policy.
 
 Подтверждение должно объяснять последствия.
@@ -218,15 +219,17 @@ Runtime-параметры должны редактироваться на ст
 
 ```text
 endpoint
+endpoint pool
 retry policy
-concurrency limit
+pool concurrency limit
+endpoint concurrency limit
 выключение обработчика
 ```
 
 Подтверждение должно быть написано понятным языком:
 
 ```text
-Новые задачи PDF будут отправляться на другой endpoint.
+Новые задачи PDF будут распределяться по обновлённому endpoint pool.
 Текущие задачи продолжат выполняться по уже выбранному обработчику.
 После сохранения рекомендуется выполнить проверку работоспособности.
 ```
@@ -347,7 +350,7 @@ Dump technical context
 В списке audit основным текстом должно быть человеческое описание:
 
 ```text
-Администратор Иванов изменил endpoint обработчика PDF.
+Администратор Иванов изменил endpoint pool обработчика PDF.
 ```
 
 Технические детали раскрываются отдельно:
@@ -361,7 +364,25 @@ user agent
 metadata
 ```
 
-Если действие опасное, UI должен дать поле для комментария или причины там, где это действительно полезно: например при массовом retry, отключении обработчика или отключении API key.
+Если действие опасное, UI должен дать поле для комментария или причины там, где это действительно полезно.
+
+Комментарий обязателен для:
+
+```text
+массовый retry
+disable processor
+изменение endpoint pool
+изменение concurrency limits
+изменение retry policy
+disable API key
+rotate API key
+cleanup temporary files вручную
+отключение admin user
+```
+
+Комментарий не обязателен, но поле можно показать для manual retry одной job, создания API key, изменения timeout, health check и экспорта support report.
+
+Audit должен восприниматься как журнал, а не как редактируемая сущность. В UI нельзя редактировать или удалять отдельные audit-записи.
 
 ## Граница MVP
 

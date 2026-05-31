@@ -97,6 +97,38 @@ ResultPayloadStorage
 - нужна очистка stale files;
 - нужно учитывать лимит диска.
 
+Baseline MVP:
+
+```text
+soft limit: 80%
+hard limit: 90%
+minimum free space: 10 GiB
+```
+
+Поведение:
+
+- при soft limit админка показывает предупреждение;
+- при hard limit Web перестаёт принимать новые файлы;
+- `POST /jobs` возвращает `503 Service Unavailable` с кодом `temporary_storage_full`;
+- Worker не берёт новые job, которым нужен новый temporary file;
+- cleanup запускается или усиливается;
+- уже идущие job не прерываются без крайней необходимости.
+
+Cleanup temporary input files:
+
+```text
+completed -> удалить input file
+blocked/final failed -> удалить input file
+cancelled -> удалить input file
+abandoned -> удалить после grace period
+```
+
+Default grace period для abandoned:
+
+```text
+24 hours
+```
+
 ## S3-compatible storage
 
 Не MVP, но должно быть предусмотрено.

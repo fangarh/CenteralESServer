@@ -27,6 +27,17 @@ https://pdf2txt.selectel.dt1520.ru/recognize_json/
 
 Сервис принимает файл и возвращает JSON.
 
+У текущего сервиса нет отдельного health endpoint, и пока нельзя рассчитывать на возможность добавить его в сам сервис.
+
+Для MVP внешний сервис считается чёрным ящиком:
+
+- контракт результата не меняем;
+- обычную бизнес-обработку из админки не запускаем;
+- доступность показываем через passive health по последним реальным вызовам;
+- ручную диагностику допускаем только как отдельный безопасный сценарий.
+
+Возможный диагностический вариант: отправить нулевой файл и считать ожидаемую ошибку валидации признаком того, что endpoint жив и обработчик отвечает. Этот вариант пока не утверждён, потому что фактический ответ `/recognize_json/` ещё не проверен. После проверки нужно зафиксировать ожидаемый HTTP status и тело ошибки.
+
 ## Ограничения
 
 - ML-сервис считается чёрным ящиком.
@@ -35,6 +46,18 @@ https://pdf2txt.selectel.dt1520.ru/recognize_json/
 - Мы не должны менять контракт результата для клиента.
 - Обработка может длиться больше 5 минут.
 - Входные PDF могут быть больше 100 МБ.
+
+Baseline лимитов MVP:
+
+```text
+default max upload size: 250 MiB
+hard safety max upload size: 500 MiB
+connect timeout: 15 seconds
+overall processor timeout: 15 minutes
+max recommended processor timeout: 60 minutes
+```
+
+Если PDF превышает лимит загрузки, Public API возвращает `413 Payload Too Large`.
 
 ## Как платформа должна работать с этим сервисом
 
@@ -73,14 +96,74 @@ adapter: Pdf2TxtHttpProcessorAdapter
 Минимальный набор:
 
 - enabled;
-- endpoint;
+- endpoint pool;
 - timeout;
 - maxAttempts;
 - retry delay;
 - after max attempts policy;
-- concurrencyLimit;
+- poolConcurrencyLimit;
+- endpointConcurrencyLimit;
 - health check mode;
 - credentials, если понадобятся.
+
+`pdf2txt-http-recognizer` может быть развёрнут несколькими одинаковыми Docker-контейнерами. В этом случае в админке задаётся список endpoint-ов одного pool-а, например пять URL. Это один сервис и один processor instance, а не пять разных processor-ов.
+
+Распределение нагрузки в MVP:
+
+- Worker выбирает endpoint на момент выполнения attempt;
+- выбираются только enabled endpoint-ы без явного unhealthy;
+- алгоритм: `least in-flight`;
+- общий лимит pool-а ограничивает суммарную параллельность;
+- per-endpoint limit ограничивает нагрузку на конкретный контейнер;
+- выбранный endpoint записывается в историю attempt.
+
+Default для endpoint pool:
+
+```text
+endpointConcurrencyLimit: 2
+poolConcurrencyLimit: endpoint count * endpointConcurrencyLimit
+```
+
+Например, для пяти endpoint-ов:
+
+```text
+endpointConcurrencyLimit: 2
+poolConcurrencyLimit: 10
+```
+
+Если все endpoint-ы заняты, это не считается ошибкой обработки. Job остаётся в очереди или получает короткий `scheduled_at` delay на 10-30 секунд.
+
+## Классификация ошибок processor-а
+
+Внешний PDF processor нормализует ошибки в стабильные коды:
+
+```text
+invalid_input
+processor_timeout
+processor_unreachable
+processor_http_error
+processor_bad_response
+processor_contract_error
+processor_overloaded
+temporary_storage_full
+internal_error
+```
+
+Retry behavior:
+
+```text
+invalid_input -> no retry
+processor_timeout -> retry
+processor_unreachable -> retry
+processor_http_error -> retry
+processor_bad_response -> retry
+processor_contract_error -> limited retry + admin warning
+processor_overloaded -> no failed attempt, queue delay
+temporary_storage_full -> no processor retry
+internal_error -> depends on transient flag
+```
+
+`processor_overloaded` не должен создавать failed attempt. Это нормальное состояние насыщения pool-а.
 
 ## ResultStore
 
@@ -144,7 +227,9 @@ GET  /api/jobs/{jobId}
 Для PDF capability:
 
 - включён ли обработчик;
-- endpoint;
+- endpoint pool;
+- health каждого endpoint-а;
+- in-flight по pool и по endpoint;
 - health;
 - текущие jobs;
 - количество queued/processing/failed;
@@ -152,5 +237,6 @@ GET  /api/jobs/{jobId}
 - цепочку попыток по hash;
 - кнопку manual retry;
 - timeout и retry policy;
-- лимит параллельности;
+- общий лимит параллельности pool-а;
+- лимит параллельности endpoint-а;
 - размер временных файлов.

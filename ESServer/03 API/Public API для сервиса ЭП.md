@@ -43,6 +43,21 @@ GET  /api/jobs/{jobId}
 
 ## Варианты ответа
 
+`POST /api/pdf-stamp-recognition/jobs` использует content hash как идемпотентность первого релиза.
+
+Базовые варианты:
+
+- `200 OK`, если результат уже есть;
+- `202 Accepted`, если создана новая job;
+- `202 Accepted`, если активная job по этому hash уже есть;
+- `200 OK`, если обработка по этому hash уже заблокирована после исчерпания retry;
+- `400 Bad Request`, если файл или запрос невалиден;
+- `413 Payload Too Large`, если файл превышает лимит загрузки;
+- `403 Forbidden`, если API key не имеет права на capability;
+- `409 Conflict`, если capability выключена настройкой;
+- `503 Service Unavailable`, если capability временно недоступна из-за состояния processor-а.
+- `503 Service Unavailable`, если temporary storage заполнен.
+
 ### Результат уже готов
 
 ```http
@@ -96,14 +111,6 @@ GET  /api/jobs/{jobId}
 200 OK
 ```
 
-или
-
-```http
-409 Conflict
-```
-
-Точный код нужно согласовать.
-
 Пример тела:
 
 ```json
@@ -111,10 +118,10 @@ GET  /api/jobs/{jobId}
   "hash": "H",
   "jobId": "J5",
   "attemptNumber": 5,
-  "status": "failed",
+  "status": "blocked",
   "final": true,
   "retryAllowed": false,
-  "message": "Processing failed after configured retry attempts"
+  "message": "Processing is blocked after configured retry attempts"
 }
 ```
 
@@ -126,6 +133,13 @@ GET  /api/jobs/{jobId}
 - если результат готов, вернуть его;
 - если job идёт, вернуть текущий jobId и status;
 - если ничего не известно, вернуть отсутствие данных.
+
+Коды:
+
+- `200 OK`, если результат есть;
+- `202 Accepted`, если есть активная обработка по этому hash;
+- `404 Not Found`, если результата нет и активной обработки нет;
+- `410 Gone` не нужен в MVP, потому что retention результатов пока бессрочный.
 
 ## GET /api/jobs/{jobId}
 
@@ -141,13 +155,30 @@ GET  /api/jobs/{jobId}
 ```json
 {
   "jobId": "J3",
-  "hash": "H",
   "capability": "pdf-stamp-recognition",
-  "attemptNumber": 3,
+  "contentHash": "sha256:...",
   "status": "processing",
+  "attempt": 3,
   "maxAttempts": 5,
-  "retrying": true,
-  "previousAttempts": 2
+  "createdAt": "...",
+  "updatedAt": "...",
+  "resultAvailable": false,
+  "resultUrl": null,
+  "error": null,
+  "correlationId": "..."
+}
+```
+
+Для failed/blocked job ошибка возвращается в нормализованном виде без raw details:
+
+```json
+{
+  "status": "blocked",
+  "error": {
+    "code": "processor_timeout",
+    "message": "Processing failed after retry attempts.",
+    "correlationId": "..."
+  }
 }
 ```
 
@@ -160,8 +191,18 @@ queued
 processing
 completed
 failed
+blocked
 cancelled
 ```
+
+Смысл:
+
+- `queued`: задача создана и ждёт Worker;
+- `processing`: Worker взял задачу;
+- `completed`: результат сохранён;
+- `failed`: текущая попытка упала, но система ещё может retry;
+- `blocked`: лимит retry исчерпан, нужен manual retry через админку;
+- `cancelled`: отменено пользователем или админом, но endpoint отмены не входит в MVP.
 
 Внутренние статусы могут быть подробнее:
 
@@ -171,6 +212,8 @@ failed_retryable
 failed_final
 abandoned
 ```
+
+Endpoint отмены job в MVP не добавляем. Причина: для него нужна полноценная cooperative cancellation, cleanup временных файлов и понятная политика отмены внешнего HTTP-вызова. Статус `cancelled` оставляем в модели как future-ready состояние для админских или будущих пользовательских сценариев.
 
 ## Дедупликация
 
@@ -186,7 +229,7 @@ abandoned
 401 Unauthorized
 ```
 
-Ключ отсутствует или неверный.
+Ключ отсутствует, формат неверный, `keyId` не найден, secret не совпал, ключ отключён или истёк.
 
 ```http
 403 Forbidden
@@ -194,11 +237,39 @@ abandoned
 
 Ключ валиден, но capability не разрешена.
 
+## Нормализованные ошибки
+
+Public API и Admin UI используют стабильные error codes:
+
+```text
+invalid_input
+processor_timeout
+processor_unreachable
+processor_http_error
+processor_bad_response
+processor_contract_error
+processor_overloaded
+temporary_storage_full
+internal_error
+```
+
+## Формат ошибок
+
+Public API возвращает единый формат ошибки:
+
+```json
+{
+  "error": {
+    "code": "processor_unavailable",
+    "message": "PDF recognition is temporarily unavailable.",
+    "details": null,
+    "correlationId": "..."
+  }
+}
+```
+
+Внешние raw errors клиенту ЭП не отдаём. Они доступны в админке, audit и support report.
+
 ## Важные нерешённые детали
 
-- точный код ответа для `failed_final`;
-- нужен ли endpoint отмены job;
 - нужен ли отдельный status endpoint по hash;
-- максимальный размер файла;
-- формат ошибок API;
-- формат correlation id.

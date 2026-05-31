@@ -132,10 +132,30 @@ status = failed_final
 Клиенту наружу:
 
 ```text
-status = failed
+status = blocked
 final = true
 retryAllowed = false/true
 ```
+
+Для Public API `blocked` означает, что система больше не делает автоматический retry. В безопасном MVP-контуре новая серия попыток запускается через manual retry в админке.
+
+## Retry по типам ошибок
+
+```text
+invalid_input -> no retry
+processor_timeout -> retry
+processor_unreachable -> retry
+processor_http_error -> retry
+processor_bad_response -> retry
+processor_contract_error -> limited retry + admin warning
+processor_overloaded -> no failed attempt, queue delay
+temporary_storage_full -> no processor retry
+internal_error -> depends on transient flag
+```
+
+`processor_overloaded` означает, что все endpoint-ы processor pool заняты. Это не ошибка обработки и не failed attempt; job остаётся в очереди или получает короткий `scheduled_at` delay.
+
+`processor_contract_error` retry-ится ограниченно, но обязательно подсвечивается в админке как возможное изменение внешнего сервиса или нарушение ожидаемого JSON-контракта.
 
 ## Manual retry
 
