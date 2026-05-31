@@ -4,5 +4,8 @@ namespace CenteralES.PdfStampRecognition;
 
 public interface IPdfStampRecognizer
 {
-    Task<PdfStampRecognitionAdapterResult> RecognizeAsync(ClaimedProcessingJob job, CancellationToken cancellationToken);
+    Task<PdfStampRecognitionAdapterResult> RecognizeAsync(
+        ClaimedProcessingJob job,
+        Stream pdfContent,
+        CancellationToken cancellationToken);
 }

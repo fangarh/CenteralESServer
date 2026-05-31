@@ -7,12 +7,16 @@ namespace CenteralES.PdfStampRecognition;
 
 public sealed class FakePdfStampRecognizer : IPdfStampRecognizer
 {
-    public async Task<PdfStampRecognitionAdapterResult> RecognizeAsync(ClaimedProcessingJob job, CancellationToken cancellationToken)
+    public async Task<PdfStampRecognitionAdapterResult> RecognizeAsync(
+        ClaimedProcessingJob job,
+        Stream pdfContent,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(job);
+        ArgumentNullException.ThrowIfNull(pdfContent);
 
         var stopwatch = Stopwatch.StartNew();
-        await Task.Yield();
+        var byteCount = await CountBytesAsync(pdfContent, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         stopwatch.Stop();
 
@@ -22,6 +26,7 @@ public sealed class FakePdfStampRecognizer : IPdfStampRecognizer
             capability = PdfStampRecognitionConstants.Capability,
             jobId = job.JobId,
             contentHash = job.ContentHash,
+            inputBytes = byteCount,
             people = Array.Empty<object>()
         });
 
@@ -35,5 +40,19 @@ public sealed class FakePdfStampRecognizer : IPdfStampRecognizer
                 NormalizedError: null,
                 Retryable: null,
                 CorrelationId: Guid.NewGuid().ToString("N")));
+    }
+
+    private static async Task<long> CountBytesAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[81920];
+        long total = 0;
+        int read;
+
+        while ((read = await stream.ReadAsync(buffer, cancellationToken)) > 0)
+        {
+            total += read;
+        }
+
+        return total;
     }
 }
