@@ -54,6 +54,7 @@ These facts are discovery tasks inside Phase 1, not blockers for GSD planning.
 - 2026-05-31: Web `POST /api/pdf-stamp-recognition/jobs` now uses `PostgresProcessingJobQueue`; app startup resolves local `db.env` or configured connection string and applies schema.
 - 2026-05-31: Worker claim -> fake pdf recognizer -> PostgreSQL result store -> queue complete flow added; Web can return cached result by hash; real DB integration test covers save/read/complete.
 - 2026-05-31: Public status read-model added: `GET /api/pdf-stamp-recognition/results/{hash}` returns `202` for active jobs and `GET /api/jobs/{jobId}` returns sanitized job status; integration DB tests run sequentially to avoid shared-database truncation races.
+- 2026-05-31: Local temporary PDF storage abstraction added; Web stores uploaded input by content-hash key before enqueue using configurable `Storage:TemporaryRoot`.
 
 ## Workflow Rules
 
@@ -63,4 +64,4 @@ These facts are discovery tasks inside Phase 1, not blockers for GSD planning.
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-05-31 after public status read-model checkpoint*
+*Last updated: 2026-05-31 after temporary input storage checkpoint*

@@ -12,12 +12,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 var processingDatabaseConnectionString = ResolveProcessingDatabaseConnectionString(builder.Configuration, builder.Environment.ContentRootPath);
+var temporaryStorageRoot = ResolveTemporaryStorageRoot(builder.Configuration);
 var databaseBootstrapper = new PostgresDatabaseBootstrapper();
 await databaseBootstrapper.EnsureDatabaseAsync(processingDatabaseConnectionString, CancellationToken.None);
 
 builder.Services.AddSingleton(NpgsqlDataSource.Create(processingDatabaseConnectionString));
 builder.Services.AddSingleton<IProcessingJobQueue, PostgresProcessingJobQueue>();
 builder.Services.AddSingleton<IPdfStampRecognitionResultStore, PostgresPdfStampRecognitionResultStore>();
+builder.Services.AddSingleton<ITemporaryFileStore>(_ => new LocalTemporaryFileStore(temporaryStorageRoot));
 
 var app = builder.Build();
 
@@ -42,6 +44,7 @@ app.MapPost("/api/pdf-stamp-recognition/jobs", async (
     HttpRequest request,
     IProcessingJobQueue queue,
     IPdfStampRecognitionResultStore resultStore,
+    ITemporaryFileStore temporaryFileStore,
     CancellationToken cancellationToken) =>
 {
     if (!request.HasFormContentType)
@@ -67,8 +70,13 @@ app.MapPost("/api/pdf-stamp-recognition/jobs", async (
     }
 
     var temporaryFileKey = $"incoming/{hash.Replace("sha256:", string.Empty, StringComparison.Ordinal)}.pdf";
+    await using (var saveStream = file.OpenReadStream())
+    {
+        await temporaryFileStore.SaveAsync(temporaryFileKey, saveStream, cancellationToken);
+    }
+
     var enqueueResult = await queue.EnqueueAsync(
-        new CreateProcessingJobCommand("pdf-stamp-recognition", hash, temporaryFileKey, DateTimeOffset.UtcNow),
+        new CreateProcessingJobCommand(PdfStampRecognitionConstants.Capability, hash, temporaryFileKey, DateTimeOffset.UtcNow),
         cancellationToken);
 
     return Results.Accepted(
@@ -148,6 +156,17 @@ static string ResolveProcessingDatabaseConnectionString(IConfiguration configura
     }
 
     throw new InvalidOperationException("Processing database connection string is not configured.");
+}
+
+static string ResolveTemporaryStorageRoot(IConfiguration configuration)
+{
+    var configured = configuration["Storage:TemporaryRoot"];
+    if (!string.IsNullOrWhiteSpace(configured))
+    {
+        return configured;
+    }
+
+    return Path.Combine(Path.GetTempPath(), "centerales-server", "temporary-files");
 }
 
 static string ToPublicStatus(CenteralES.Processing.ProcessingJobStatus status)
