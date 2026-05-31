@@ -1,10 +1,23 @@
+using CenteralES.Infrastructure.Postgres;
+using CenteralES.Infrastructure.Processing;
+using CenteralES.Processing.Queue;
 using CenteralES.Storage;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 
+var processingDatabaseConnectionString = ResolveProcessingDatabaseConnectionString(builder.Configuration, builder.Environment.ContentRootPath);
+var databaseBootstrapper = new PostgresDatabaseBootstrapper();
+await databaseBootstrapper.EnsureDatabaseAsync(processingDatabaseConnectionString, CancellationToken.None);
+
+builder.Services.AddSingleton(NpgsqlDataSource.Create(processingDatabaseConnectionString));
+builder.Services.AddSingleton<IProcessingJobQueue, PostgresProcessingJobQueue>();
+
 var app = builder.Build();
+
+await databaseBootstrapper.ApplySchemaAsync(app.Services.GetRequiredService<NpgsqlDataSource>(), CancellationToken.None);
 
 if (app.Environment.IsDevelopment())
 {
@@ -21,7 +34,10 @@ app.MapGet("/health/ready", () =>
     Results.Ok(new HealthResponse("healthy", DateTimeOffset.UtcNow)))
     .WithName("ReadyHealth");
 
-app.MapPost("/api/pdf-stamp-recognition/jobs", async (HttpRequest request, CancellationToken cancellationToken) =>
+app.MapPost("/api/pdf-stamp-recognition/jobs", async (
+    HttpRequest request,
+    IProcessingJobQueue queue,
+    CancellationToken cancellationToken) =>
 {
     if (!request.HasFormContentType)
     {
@@ -38,11 +54,19 @@ app.MapPost("/api/pdf-stamp-recognition/jobs", async (HttpRequest request, Cance
 
     await using var stream = file.OpenReadStream();
     var hash = await ContentHash.ComputeSha256Async(stream, cancellationToken);
-    var jobId = Guid.NewGuid().ToString("N");
+    var temporaryFileKey = $"incoming/{hash.Replace("sha256:", string.Empty, StringComparison.Ordinal)}.pdf";
+    var enqueueResult = await queue.EnqueueAsync(
+        new CreateProcessingJobCommand("pdf-stamp-recognition", hash, temporaryFileKey, DateTimeOffset.UtcNow),
+        cancellationToken);
 
     return Results.Accepted(
-        $"/api/jobs/{jobId}",
-        new PdfJobResponse(hash, jobId, 1, "queued", Deduplicated: false));
+        $"/api/jobs/{enqueueResult.JobId:N}",
+        new PdfJobResponse(
+            hash,
+            enqueueResult.JobId.ToString("N"),
+            enqueueResult.AttemptNumber,
+            ToPublicStatus(enqueueResult.Status),
+            enqueueResult.Deduplicated));
 })
 .DisableAntiforgery()
 .WithName("CreatePdfStampRecognitionJob");
@@ -56,6 +80,49 @@ app.MapGet("/api/jobs/{jobId}", (string jobId) =>
     .WithName("GetJob");
 
 app.Run();
+
+static string ResolveProcessingDatabaseConnectionString(IConfiguration configuration, string contentRootPath)
+{
+    var configured = configuration.GetConnectionString("ProcessingDatabase");
+    if (!string.IsNullOrWhiteSpace(configured))
+    {
+        return configured;
+    }
+
+    var fromEnvironment = Environment.GetEnvironmentVariable("CENTERALES_PROCESSING_DATABASE");
+    if (!string.IsNullOrWhiteSpace(fromEnvironment))
+    {
+        return fromEnvironment;
+    }
+
+    var directory = new DirectoryInfo(contentRootPath);
+    while (directory is not null)
+    {
+        var envPath = Path.Combine(directory.FullName, "db.env");
+        if (File.Exists(envPath))
+        {
+            return PostgresConnectionString.ReadFromEnvFile(envPath, "test_db");
+        }
+
+        directory = directory.Parent;
+    }
+
+    throw new InvalidOperationException("Processing database connection string is not configured.");
+}
+
+static string ToPublicStatus(CenteralES.Processing.ProcessingJobStatus status)
+{
+    return status switch
+    {
+        CenteralES.Processing.ProcessingJobStatus.Queued => "queued",
+        CenteralES.Processing.ProcessingJobStatus.Processing => "processing",
+        CenteralES.Processing.ProcessingJobStatus.Completed => "completed",
+        CenteralES.Processing.ProcessingJobStatus.Failed => "failed",
+        CenteralES.Processing.ProcessingJobStatus.Blocked => "blocked",
+        CenteralES.Processing.ProcessingJobStatus.Cancelled => "cancelled",
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown processing job status.")
+    };
+}
 
 internal sealed record HealthResponse(string Status, DateTimeOffset CheckedAt);
 
