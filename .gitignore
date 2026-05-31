@@ -9,7 +9,11 @@ Desktop.ini
 # Local environment
 .env
 .env.*
+db.env
 !.env.example
+
+# Local Codex scratch files
+.codex-local/
 
 # Logs and temporary files
 *.log
