@@ -46,6 +46,10 @@ Plan:
 
 These facts are discovery tasks inside Phase 1, not blockers for GSD planning.
 
+## Implementation Checkpoints
+
+- 2026-05-31: .NET 9 SDK installed locally, solution skeleton created, domain processing primitives added, Web API contract skeleton added, unit/integration tests passing.
+
 ## Workflow Rules
 
 - Keep GSD interactive by default.
@@ -54,4 +58,4 @@ These facts are discovery tasks inside Phase 1, not blockers for GSD planning.
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-05-31 after GSD initialization*
+*Last updated: 2026-05-31 after Phase 1 implementation start*

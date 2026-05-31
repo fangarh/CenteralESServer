@@ -1,0 +1,6 @@
+@CenteralES.Web_HostAddress = http://localhost:5045
+
+GET {{CenteralES.Web_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

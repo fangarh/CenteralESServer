@@ -10,7 +10,7 @@
 ### Phase 1: Walking Skeleton PDF Processing
 
 **Mode:** mvp  
-**Status:** Planned  
+**Status:** In Progress  
 **Plan:** `.planning/phases/001-walking-skeleton-pdf-processing/PLAN.md`
 
 Сквозной slice:
