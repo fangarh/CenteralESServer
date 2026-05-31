@@ -1,0 +1,17 @@
+{
+  "workflow": {
+    "mode": "interactive",
+    "sourceOfTruth": "ESServer",
+    "autonomous": false
+  },
+  "project": {
+    "name": "CenteralESServer",
+    "language": "ru",
+    "planningStarted": "2026-05-31"
+  },
+  "preferences": {
+    "useGsdArtifactsAsDerivedPlans": true,
+    "requireObsidianUpdateBeforePlanConflictResolution": true,
+    "commitPlanningArtifacts": true
+  }
+}
