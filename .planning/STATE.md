@@ -49,6 +49,7 @@ These facts are discovery tasks inside Phase 1, not blockers for GSD planning.
 ## Implementation Checkpoints
 
 - 2026-05-31: .NET 9 SDK installed locally, solution skeleton created, domain processing primitives added, Web API contract skeleton added, unit/integration tests passing.
+- 2026-05-31: PostgreSQL queue contracts and initial schema SQL added, including `FOR UPDATE SKIP LOCKED` claim query and separate attempt diagnostics/result index tables.
 
 ## Workflow Rules
 

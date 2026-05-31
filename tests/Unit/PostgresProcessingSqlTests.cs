@@ -1,0 +1,19 @@
+using CenteralES.Infrastructure.Processing;
+
+namespace CenteralES.UnitTests;
+
+public sealed class PostgresProcessingSqlTests
+{
+    [Fact]
+    public void ClaimNext_uses_skip_locked_for_concurrent_workers()
+    {
+        Assert.Contains("for update skip locked", PostgresProcessingSql.ClaimNext, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Schema_keeps_result_index_separate_from_attempt_diagnostics()
+    {
+        Assert.Contains("create table if not exists processing_result_index", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("create table if not exists processing_attempt_diagnostics", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+    }
+}

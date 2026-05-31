@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\Modules\Processing\CenteralES.Processing.csproj" />
     <ProjectReference Include="..\..\src\Modules\PdfStampRecognition\CenteralES.PdfStampRecognition.csproj" />
     <ProjectReference Include="..\..\src\Modules\Storage\CenteralES.Storage.csproj" />
+    <ProjectReference Include="..\..\src\Shared\CenteralES.Infrastructure\CenteralES.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
