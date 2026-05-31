@@ -49,8 +49,10 @@ Processor Details
 Jobs
 Job Details
 Results
+Result Details
 API Keys
 Storage
+Health
 Audit
 Settings
 Admin Users
@@ -231,10 +233,13 @@ date = today
 
 ## Results
 
+`Results` входит в MVP как поиск и просмотр результатов, а не как аналитический раздел.
+
 Поиск результата:
 
 - по hash;
 - по capability;
+- по jobId;
 - по дате;
 - по статусу.
 
@@ -247,6 +252,59 @@ date = today
 
 - показать metadata;
 - дать скачать artifact, если это разрешено.
+
+## Result Details
+
+Страница результата должна показывать:
+
+- hash;
+- capability;
+- связанный job;
+- статус результата;
+- тип результата: JSON, файл, набор файлов, JSON плюс файлы;
+- человекочитаемый summary;
+- ссылку на payload или artifact metadata;
+- технические детали в раскрываемом блоке.
+
+Для PDF в MVP основной экран показывает найденных людей, должности и подписантов, если это можно извлечь из существующего JSON-контракта.
+
+Raw JSON показывается отдельно и не должен быть главным экраном.
+
+## Экспорт отчёта для поддержки
+
+Экспорт отчёта входит в MVP.
+
+Минимально экспорт доступен из `Job Details`.
+
+Если результат уже есть, `Result Details` может давать связанный экспорт контекста результата.
+
+Отчёт должен включать:
+
+```text
+jobId
+correlationId
+capability
+processor
+content hash
+status
+attempts
+timestamps
+error summary
+retry history
+health snapshot
+result index reference
+technical metadata
+```
+
+По умолчанию отчёт не включает:
+
+- входной файл;
+- большие payload;
+- большие result artifacts.
+
+Для JSON-результата можно дать отдельную кнопку `Экспортировать raw JSON`, если права и политика доступа это разрешают.
+
+Назначение отчёта — передать контекст в поддержку без необходимости читать БД или логи вручную.
 
 ## API Keys
 
@@ -338,6 +396,30 @@ Optional diagnostic test
 - размер result artifacts;
 - retention policy read-only для MVP.
 
+## Health
+
+`Health` входит в MVP как отдельный экран.
+
+Dashboard показывает summary и alerts.
+
+`Health` показывает подробную картину:
+
+```text
+Web
+Worker
+PostgreSQL
+Temporary storage
+Result storage
+Processor health
+очередь
+heartbeat
+последняя проверка
+```
+
+Экран нужен для диагностики состояния системы без перехода в технические логи.
+
+`Health` не должен запускать обычную бизнес-обработку файлов.
+
 ## Audit
 
 Журнал действий:
@@ -346,14 +428,88 @@ Optional diagnostic test
 - когда;
 - что изменил;
 - на какой объект повлияло;
+- старое значение;
+- новое значение;
+- причина или комментарий, если действие требует объяснения;
+- correlationId;
+- IP/user agent, если применимо;
 - технические детали в metadata.
 
 Техническая metadata не должна быть главным содержанием строки audit.
 
 Список audit показывает человеческое описание действия, а подробная metadata раскрывается в деталях.
 
+Audit обязателен для действий администратора, включая:
+
+```text
+изменение параметров processor-а
+включение/выключение processor-а
+manual retry
+массовый retry
+создание API key
+disable/rotate API key
+изменение allowed capabilities
+создание/отключение admin user
+смена пароля admin user
+cleanup временных файлов
+```
+
 ## Settings
 
 Только общесистемные настройки.
 
 Не превращать Settings в склад всего подряд. Настройки конкретного processor-а должны быть на странице processor-а.
+
+В MVP `Settings` должен быть узким экраном:
+
+- общие параметры системы;
+- параметры, которые не принадлежат конкретному processor-у;
+- read-only информация о режиме поставки, если её нельзя менять безопасно.
+
+## Admin Users
+
+`Admin Users` входит в MVP.
+
+В первом релизе есть только роль `admin`, но экран нужен для базового управления доступом:
+
+- создать администратора;
+- отключить администратора;
+- сменить пароль;
+- посмотреть last login;
+- посмотреть audit действий.
+
+Сложные роли и права не входят в MVP, но модель должна позволять добавить их позже.
+
+## Граница MVP
+
+В MVP входят:
+
+```text
+Dashboard
+Поставка
+Processors
+Processor Details
+Jobs
+Job Details
+Results
+Result Details
+API Keys
+Storage
+Health
+Audit
+Admin Users
+Settings
+```
+
+Из MVP откладываются:
+
+```text
+сложные роли кроме admin
+создание processor с нуля через UI
+редактор произвольных contracts
+retention policy UI для результатов
+полноценная аналитика и графики
+экспорт больших payload пакетами
+глобальный DevOps mode
+multi-tenant и организации
+```
