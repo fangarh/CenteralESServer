@@ -306,6 +306,8 @@ technical metadata
 
 Для ошибок внешнего processor-а админка показывает нормализованный код, понятный текст, endpoint, HTTP status, retryable true/false, номер attempt, raw error в технических деталях и `correlationId`.
 
+Raw diagnostic details показываются только как обрезанный и очищенный excerpt из attempt diagnostics. Полные response payload, входные файлы и secrets в админке не отображаются.
+
 По умолчанию отчёт не включает:
 
 - входной файл;
@@ -459,6 +461,37 @@ heartbeat
 Экран нужен для диагностики состояния системы без перехода в технические логи.
 
 `Health` не должен запускать обычную бизнес-обработку файлов.
+
+Минимальный состав экрана `Health` для MVP:
+
+- Web: live, ready, version/build, database connectivity, schema compatibility;
+- Worker: количество worker-ов, последний heartbeat, stale worker-ы, текущие processing jobs;
+- PostgreSQL: доступность, latency последней проверки, ошибка подключения при наличии;
+- Temporary storage: used percent, free space, soft/hard limit, возможность записи;
+- Result storage: доступность чтения/записи;
+- Queue: queued, processing, retry scheduled, blocked/final failed;
+- Processor health: состояние processor instance и endpoint pool без опасных активных вызовов;
+- Последняя проверка: время, длительность, correlationId.
+
+Статусы отображаются как:
+
+```text
+healthy
+degraded
+unhealthy
+unknown
+```
+
+`unknown` допустим для внешних чёрных ящиков, если система не может безопасно проверить состояние без обычной обработки файла.
+
+Кнопка `Проверить` на экране `Health` запускает только безопасные проверки:
+
+- локальные проверки Web/Worker/PostgreSQL/storage;
+- валидацию runtime-настроек processor-а;
+- passive health refresh по последним событиям;
+- optional diagnostic test только если processor definition явно описывает безопасный сценарий.
+
+Для `pdf2txt-http-recognizer` без подтверждённого diagnostic probe кнопка `Проверить` не отправляет PDF или нулевой файл во внешний `/recognize_json/`.
 
 ## Audit
 

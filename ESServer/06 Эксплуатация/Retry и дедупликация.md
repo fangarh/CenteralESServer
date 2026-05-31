@@ -57,6 +57,10 @@ hash H
 - когда был retry;
 - какая попытка дала результат.
 
+История attempt хранит не только статус, но и диагностический контекст внешнего вызова: выбранный endpoint, длительность, HTTP status, нормализованный код ошибки, retryable true/false и correlationId.
+
+Диагностика attempt отделена от result payload. Она нужна для админки, retry-решений и support report, но не считается бизнес-результатом capability.
+
 ## Ответ клиенту
 
 Если идёт повторная попытка:
@@ -156,6 +160,8 @@ internal_error -> depends on transient flag
 `processor_overloaded` означает, что все endpoint-ы processor pool заняты. Это не ошибка обработки и не failed attempt; job остаётся в очереди или получает короткий `scheduled_at` delay.
 
 `processor_contract_error` retry-ится ограниченно, но обязательно подсвечивается в админке как возможное изменение внешнего сервиса или нарушение ожидаемого JSON-контракта.
+
+Для `processor_bad_response` и `processor_contract_error` attempt может сохранять обрезанный raw diagnostic excerpt, чтобы не терять причину сбоя. Полный response body и большие payload в историю attempts не пишутся.
 
 ## Manual retry
 
