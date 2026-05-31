@@ -190,6 +190,20 @@ concurrency limit
 - result link;
 - кнопки manual retry/cancel, если разрешено.
 
+По умолчанию страница показывает понятный статус, причину и доступные действия.
+
+Технические поля должны быть в раскрываемом блоке `Технические детали`:
+
+```text
+jobId
+correlationId
+processor key
+capability key
+raw error
+stack trace
+heartbeat timestamp
+```
+
 Retry должен поддерживаться в двух формах:
 
 ```text
@@ -333,6 +347,10 @@ Optional diagnostic test
 - что изменил;
 - на какой объект повлияло;
 - технические детали в metadata.
+
+Техническая metadata не должна быть главным содержанием строки audit.
+
+Список audit показывает человеческое описание действия, а подробная metadata раскрывается в деталях.
 
 ## Settings
 
