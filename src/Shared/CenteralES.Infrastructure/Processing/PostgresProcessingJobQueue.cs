@@ -153,6 +153,71 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         return claimed;
     }
 
+    public async Task<ProcessingJobSnapshot?> GetCurrentByHashAsync(string capability, string contentHash, CancellationToken cancellationToken)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("""
+            select
+                j.subject_id,
+                j.id,
+                j.capability,
+                j.content_hash,
+                j.temporary_file_key,
+                j.attempt_number,
+                j.status,
+                j.created_at,
+                j.finished_at,
+                d.endpoint,
+                d.duration_ms,
+                d.http_status,
+                d.normalized_error_code,
+                d.retryable,
+                d.raw_error_excerpt,
+                d.correlation_id
+            from processing_subjects s
+            join processing_jobs j on j.id = s.current_job_id
+            left join processing_attempt_diagnostics d on d.job_id = j.id
+            where s.capability = @capability
+              and s.content_hash = @content_hash;
+            """, connection);
+        command.Parameters.AddWithValue("capability", capability);
+        command.Parameters.AddWithValue("content_hash", contentHash);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await ReadSnapshotAsync(reader, cancellationToken);
+    }
+
+    public async Task<ProcessingJobSnapshot?> GetJobAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("""
+            select
+                j.subject_id,
+                j.id,
+                j.capability,
+                j.content_hash,
+                j.temporary_file_key,
+                j.attempt_number,
+                j.status,
+                j.created_at,
+                j.finished_at,
+                d.endpoint,
+                d.duration_ms,
+                d.http_status,
+                d.normalized_error_code,
+                d.retryable,
+                d.raw_error_excerpt,
+                d.correlation_id
+            from processing_jobs j
+            left join processing_attempt_diagnostics d on d.job_id = j.id
+            where j.id = @job_id;
+            """, connection);
+        command.Parameters.AddWithValue("job_id", jobId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await ReadSnapshotAsync(reader, cancellationToken);
+    }
+
     public async Task CompleteAsync(CompleteProcessingJobCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -297,6 +362,43 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
             "cancelled" => ProcessingJobStatus.Cancelled,
             _ => throw new InvalidOperationException($"Unknown job status '{status}'.")
         };
+    }
+
+    private static async Task<ProcessingJobSnapshot?> ReadSnapshotAsync(NpgsqlDataReader reader, CancellationToken cancellationToken)
+    {
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new ProcessingJobSnapshot(
+            reader.GetGuid(0),
+            reader.GetGuid(1),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetString(4),
+            reader.GetInt32(5),
+            ParseStatus(reader.GetString(6)),
+            reader.GetFieldValue<DateTimeOffset>(7),
+            reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8),
+            ReadDiagnostics(reader));
+    }
+
+    private static AttemptDiagnostics? ReadDiagnostics(NpgsqlDataReader reader)
+    {
+        if (reader.IsDBNull(15))
+        {
+            return null;
+        }
+
+        return new AttemptDiagnostics(
+            reader.IsDBNull(9) ? null : reader.GetString(9),
+            reader.IsDBNull(10) ? null : TimeSpan.FromMilliseconds(reader.GetInt32(10)),
+            reader.IsDBNull(11) ? null : reader.GetInt32(11),
+            reader.IsDBNull(12) ? null : Enum.Parse<NormalizedProcessorError>(reader.GetString(12)),
+            reader.IsDBNull(13) ? null : reader.GetBoolean(13),
+            reader.GetString(15),
+            reader.IsDBNull(14) ? null : reader.GetString(14));
     }
 
     private sealed record ExistingSubject(

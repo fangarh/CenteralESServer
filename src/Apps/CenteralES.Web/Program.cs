@@ -85,18 +85,38 @@ app.MapPost("/api/pdf-stamp-recognition/jobs", async (
 
 app.MapGet("/api/pdf-stamp-recognition/results/{hash}", async (
     string hash,
+    IProcessingJobQueue queue,
     IPdfStampRecognitionResultStore resultStore,
     CancellationToken cancellationToken) =>
 {
     var result = await resultStore.GetByHashAsync(hash, cancellationToken);
-    return result is null
-        ? Results.NotFound(ApiErrorResponse.Create("result_not_found", $"No result or active processing found for hash '{hash}'."))
-        : Results.Ok(ToPdfResultResponse(result));
+    if (result is not null)
+    {
+        return Results.Ok(ToPdfResultResponse(result));
+    }
+
+    var currentJob = await queue.GetCurrentByHashAsync(PdfStampRecognitionConstants.Capability, hash, cancellationToken);
+    return currentJob is not null && IsPublicPending(currentJob.Status)
+        ? Results.Accepted($"/api/jobs/{currentJob.JobId:N}", ToPdfJobResponse(currentJob, deduplicated: true))
+        : Results.NotFound(ApiErrorResponse.Create("result_not_found", $"No result or active processing found for hash '{hash}'."));
 })
     .WithName("GetPdfStampRecognitionResult");
 
-app.MapGet("/api/jobs/{jobId}", (string jobId) =>
-    Results.NotFound(ApiErrorResponse.Create("job_not_found", $"Job '{jobId}' was not found.")))
+app.MapGet("/api/jobs/{jobId}", async (
+    string jobId,
+    IProcessingJobQueue queue,
+    CancellationToken cancellationToken) =>
+{
+    if (!Guid.TryParse(jobId, out var parsedJobId))
+    {
+        return Results.BadRequest(ApiErrorResponse.Create("invalid_input", $"Job id '{jobId}' is not a valid GUID."));
+    }
+
+    var job = await queue.GetJobAsync(parsedJobId, cancellationToken);
+    return job is null
+        ? Results.NotFound(ApiErrorResponse.Create("job_not_found", $"Job '{jobId}' was not found."))
+        : Results.Ok(ToPdfJobResponse(job, deduplicated: false));
+})
     .WithName("GetJob");
 
 app.Run();
@@ -154,6 +174,22 @@ static PdfResultResponse ToPdfResultResponse(PdfStampRecognitionResult result)
         "completed",
         result.ContractVersion,
         payload.RootElement.Clone());
+}
+
+static PdfJobResponse ToPdfJobResponse(ProcessingJobSnapshot job, bool deduplicated)
+{
+    return new PdfJobResponse(
+        job.ContentHash,
+        job.JobId.ToString("N"),
+        job.AttemptNumber,
+        ToPublicStatus(job.Status),
+        deduplicated);
+}
+
+static bool IsPublicPending(CenteralES.Processing.ProcessingJobStatus status)
+{
+    return status is CenteralES.Processing.ProcessingJobStatus.Queued
+        or CenteralES.Processing.ProcessingJobStatus.Processing;
 }
 
 internal sealed record HealthResponse(string Status, DateTimeOffset CheckedAt);
