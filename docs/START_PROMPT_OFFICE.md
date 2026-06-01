@@ -7,7 +7,7 @@
 
 Репозиторий: D:\Projects\2026\CenteralESServer
 GitHub: https://github.com/fangarh/CenteralESServer.git
-Текущий последний checkpoint: 8cb26a0 Add admin job support report
+Текущий последний checkpoint: ac03151 Refactor web API endpoint composition
 Дата handoff: 2026-06-01
 
 Работай по-русски. Не выводи секреты из db.env. db.env и test.pdf должны оставаться ignored. Не используй Entity Framework: только явный SQL/Npgsql. Используй локальный .NET SDK:
@@ -17,7 +17,7 @@ C:\Users\Admin\.dotnet\dotnet.exe
 Перед продолжением:
 1. Перейди в D:\Projects\2026\CenteralESServer.
 2. Выполни git status --short.
-3. Проверь git log -1 --oneline. Если последним коммитом является handoff commit, проверь, что в истории есть checkpoint `8cb26a0 Add admin job support report`.
+3. Проверь git log -1 --oneline. Если последним коммитом является handoff commit, проверь, что в истории есть checkpoint `ac03151 Refactor web API endpoint composition`.
 4. Проверь, что db.env игнорируется: git check-ignore -v db.env.
 5. Проверь, что test.pdf игнорируется: git check-ignore -v test.pdf.
 6. Прочитай:
@@ -42,6 +42,7 @@ C:\Users\Admin\.dotnet\dotnet.exe
 - Есть append-only audit table admin_audit_events; manual retry пишет manual_retry_job.
 - Есть temporary storage hard/min-free guard: POST /api/pdf-stamp-recognition/jobs возвращает 503 temporary_storage_full при превышении лимита.
 - Есть support report MVP: GET /api/admin/jobs/{jobId}/support-report под admin session, без CSRF, без входного PDF, temporaryFileKey, raw secrets и raw result payload.
+- После code audit Web API разнесён из Program.cs по endpoint groups/contracts/auth/mappings; Program.cs теперь маленький composition root. Manual retry result больше не enum+nullable payload, а typed records.
 - Health endpoints: /health/live и /health/ready.
 - Worker heartbeat и job heartbeat реализованы.
 - test.pdf локальный и ignored, можно использовать для ручного pdf2txt smoke.
@@ -54,8 +55,8 @@ C:\Users\Admin\.dotnet\dotnet.exe
 
 Следующий логичный шаг для MVP:
 1. Read API для audit/admin visibility.
-2. Либо Docker Compose delivery MVP: Web, Worker, PostgreSQL, shared local storage, init command первого admin.
-3. Затем Admin UI completion.
+2. Либо продолжить code-audit refactor на PostgresProcessingJobQueue.
+3. Либо Docker Compose delivery MVP: Web, Worker, PostgreSQL, shared local storage, init command первого admin.
 
 Для следующей реализации начни с малого вертикального slice. Если выбираешь audit/read API:
 - добавить read-only endpoint под admin session, например GET /api/admin/audit;
