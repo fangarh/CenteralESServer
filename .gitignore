@@ -11,6 +11,7 @@ Desktop.ini
 .env.*
 db.env
 !.env.example
+test.pdf
 
 # Local Codex scratch files
 .codex-local/

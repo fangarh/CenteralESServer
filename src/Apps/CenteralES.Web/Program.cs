@@ -1,3 +1,4 @@
+using CenteralES.Admin;
 using CenteralES.Infrastructure.Postgres;
 using CenteralES.Infrastructure.PdfStampRecognition;
 using CenteralES.Infrastructure.Processing;
@@ -8,11 +9,14 @@ using Npgsql;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
 
 builder.Services.AddOpenApi();
 
 var processingDatabaseConnectionString = ResolveProcessingDatabaseConnectionString(builder.Configuration, builder.Environment.ContentRootPath);
 var temporaryStorageRoot = ResolveTemporaryStorageRoot(builder.Configuration);
+var pdfMaxUploadBytes = ResolvePdfMaxUploadBytes(builder.Configuration);
 var databaseBootstrapper = new PostgresDatabaseBootstrapper();
 await databaseBootstrapper.EnsureDatabaseAsync(processingDatabaseConnectionString, CancellationToken.None);
 
@@ -20,6 +24,7 @@ builder.Services.AddSingleton(NpgsqlDataSource.Create(processingDatabaseConnecti
 builder.Services.AddSingleton<IProcessingJobQueue, PostgresProcessingJobQueue>();
 builder.Services.AddSingleton<IPdfStampRecognitionResultStore, PostgresPdfStampRecognitionResultStore>();
 builder.Services.AddSingleton<ITemporaryFileStore>(_ => new LocalTemporaryFileStore(temporaryStorageRoot));
+builder.Services.AddSingleton<IAdminProcessingReadStore, PostgresAdminProcessingReadStore>();
 
 var app = builder.Build();
 
@@ -36,8 +41,28 @@ app.MapGet("/health/live", () =>
     Results.Ok(new HealthResponse("healthy", DateTimeOffset.UtcNow)))
     .WithName("LiveHealth");
 
-app.MapGet("/health/ready", () =>
-    Results.Ok(new HealthResponse("healthy", DateTimeOffset.UtcNow)))
+app.MapGet("/health/ready", async (
+    NpgsqlDataSource dataSource,
+    ITemporaryFileStore temporaryFileStore,
+    CancellationToken cancellationToken) =>
+{
+    var checkedAt = DateTimeOffset.UtcNow;
+    var checks = new[]
+    {
+        await CheckPostgresAsync(dataSource, cancellationToken),
+        await CheckProcessingSchemaAsync(dataSource, cancellationToken),
+        await CheckTemporaryStorageAsync(temporaryFileStore, cancellationToken)
+    };
+    var status = checks.All(check => string.Equals(check.Status, "healthy", StringComparison.Ordinal))
+        ? "healthy"
+        : "unhealthy";
+
+    return Results.Json(
+        new ReadyHealthResponse(status, checkedAt, checks),
+        statusCode: string.Equals(status, "healthy", StringComparison.Ordinal)
+            ? StatusCodes.Status200OK
+            : StatusCodes.Status503ServiceUnavailable);
+})
     .WithName("ReadyHealth");
 
 app.MapPost("/api/pdf-stamp-recognition/jobs", async (
@@ -58,6 +83,13 @@ app.MapPost("/api/pdf-stamp-recognition/jobs", async (
     if (file is null || file.Length == 0)
     {
         return Results.BadRequest(ApiErrorResponse.Create("invalid_input", "PDF file is required."));
+    }
+
+    if (file.Length > pdfMaxUploadBytes)
+    {
+        return Results.Json(
+            ApiErrorResponse.Create("payload_too_large", $"PDF file exceeds the configured limit of {pdfMaxUploadBytes} bytes."),
+            statusCode: StatusCodes.Status413PayloadTooLarge);
     }
 
     await using var stream = file.OpenReadStream();
@@ -127,6 +159,68 @@ app.MapGet("/api/jobs/{jobId}", async (
 })
     .WithName("GetJob");
 
+app.MapGet("/api/admin/jobs", async (
+    string? capability,
+    string? status,
+    string? hash,
+    int? limit,
+    IAdminProcessingReadStore readStore,
+    CancellationToken cancellationToken) =>
+{
+    if (!TryParseOptionalStatus(status, out var parsedStatus))
+    {
+        return Results.BadRequest(ApiErrorResponse.Create("invalid_input", $"Job status '{status}' is not valid."));
+    }
+
+    var jobs = await readStore.ListJobsAsync(
+        new AdminProcessingJobListQuery(
+            string.IsNullOrWhiteSpace(capability) ? null : capability,
+            parsedStatus,
+            string.IsNullOrWhiteSpace(hash) ? null : hash,
+            limit ?? 50),
+        cancellationToken);
+
+    return Results.Ok(new AdminJobListResponse(jobs.Select(ToAdminJobListItemResponse).ToArray()));
+})
+    .WithName("AdminListJobs");
+
+app.MapGet("/api/admin/jobs/{jobId}", async (
+    string jobId,
+    IAdminProcessingReadStore readStore,
+    CancellationToken cancellationToken) =>
+{
+    if (!Guid.TryParse(jobId, out var parsedJobId))
+    {
+        return Results.BadRequest(ApiErrorResponse.Create("invalid_input", $"Job id '{jobId}' is not a valid GUID."));
+    }
+
+    var job = await readStore.GetJobAsync(parsedJobId, cancellationToken);
+    return job is null
+        ? Results.NotFound(ApiErrorResponse.Create("job_not_found", $"Job '{jobId}' was not found."))
+        : Results.Ok(ToAdminJobDetailsResponse(job));
+})
+    .WithName("AdminGetJob");
+
+app.MapGet("/api/admin/processors/{processorKey}", async (
+    string processorKey,
+    IAdminProcessingReadStore readStore,
+    CancellationToken cancellationToken) =>
+{
+    if (!string.Equals(processorKey, PdfStampRecognitionConstants.ProcessorKey, StringComparison.Ordinal))
+    {
+        return Results.NotFound(ApiErrorResponse.Create("processor_not_found", $"Processor '{processorKey}' was not found."));
+    }
+
+    var status = await readStore.GetProcessorStatusAsync(
+        PdfStampRecognitionConstants.ProcessorKey,
+        PdfStampRecognitionConstants.Capability,
+        recentDiagnosticsLimit: 10,
+        cancellationToken);
+
+    return Results.Ok(ToAdminProcessorStatusResponse(status));
+})
+    .WithName("AdminGetProcessorStatus");
+
 app.Run();
 
 static string ResolveProcessingDatabaseConnectionString(IConfiguration configuration, string contentRootPath)
@@ -167,6 +261,98 @@ static string ResolveTemporaryStorageRoot(IConfiguration configuration)
     }
 
     return Path.Combine(Path.GetTempPath(), "centerales-server", "temporary-files");
+}
+
+static long ResolvePdfMaxUploadBytes(IConfiguration configuration)
+{
+    const long defaultMaxUploadBytes = 250L * 1024 * 1024;
+    const long hardMaxUploadBytes = 500L * 1024 * 1024;
+
+    var configured = configuration["PdfStampRecognition:MaxUploadBytes"];
+    if (string.IsNullOrWhiteSpace(configured))
+    {
+        return defaultMaxUploadBytes;
+    }
+
+    if (!long.TryParse(configured, out var value) || value <= 0)
+    {
+        throw new InvalidOperationException("Configuration value PdfStampRecognition:MaxUploadBytes must be a positive integer.");
+    }
+
+    if (value > hardMaxUploadBytes)
+    {
+        throw new InvalidOperationException($"Configuration value PdfStampRecognition:MaxUploadBytes must not exceed {hardMaxUploadBytes} bytes.");
+    }
+
+    return value;
+}
+
+static async Task<HealthCheckItemResponse> CheckPostgresAsync(
+    NpgsqlDataSource dataSource,
+    CancellationToken cancellationToken)
+{
+    try
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("select 1;", connection);
+        await command.ExecuteScalarAsync(cancellationToken);
+        return new HealthCheckItemResponse("postgres", "healthy");
+    }
+    catch (Exception ex) when (ex is not OperationCanceledException)
+    {
+        return new HealthCheckItemResponse("postgres", "unhealthy");
+    }
+}
+
+static async Task<HealthCheckItemResponse> CheckProcessingSchemaAsync(
+    NpgsqlDataSource dataSource,
+    CancellationToken cancellationToken)
+{
+    try
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("""
+            select
+                to_regclass('public.processing_subjects') is not null
+                and to_regclass('public.processing_jobs') is not null
+                and to_regclass('public.processing_attempt_diagnostics') is not null
+                and to_regclass('public.processing_result_index') is not null
+                and to_regclass('public.pdf_stamp_recognition_results') is not null
+                and to_regclass('public.processing_worker_heartbeats') is not null;
+            """, connection);
+        var compatible = await command.ExecuteScalarAsync(cancellationToken);
+        return new HealthCheckItemResponse(
+            "processingSchema",
+            compatible is true ? "healthy" : "unhealthy");
+    }
+    catch (Exception ex) when (ex is not OperationCanceledException)
+    {
+        return new HealthCheckItemResponse("processingSchema", "unhealthy");
+    }
+}
+
+static async Task<HealthCheckItemResponse> CheckTemporaryStorageAsync(
+    ITemporaryFileStore temporaryFileStore,
+    CancellationToken cancellationToken)
+{
+    var key = $".health/ready-{Guid.NewGuid():N}.tmp";
+
+    try
+    {
+        await using var content = new MemoryStream("ok"u8.ToArray());
+        await temporaryFileStore.SaveAsync(key, content, cancellationToken);
+        await using (var saved = await temporaryFileStore.OpenReadAsync(key, cancellationToken))
+        {
+            _ = saved.ReadByte();
+        }
+
+        await temporaryFileStore.DeleteIfExistsAsync(key, cancellationToken);
+        return new HealthCheckItemResponse("temporaryStorage", "healthy");
+    }
+    catch (Exception ex) when (ex is not OperationCanceledException)
+    {
+        return new HealthCheckItemResponse("temporaryStorage", "unhealthy");
+    }
 }
 
 static string ToPublicStatus(CenteralES.Processing.ProcessingJobStatus status)
@@ -211,7 +397,140 @@ static bool IsPublicPending(CenteralES.Processing.ProcessingJobStatus status)
         or CenteralES.Processing.ProcessingJobStatus.Processing;
 }
 
+static bool TryParseOptionalStatus(string? status, out CenteralES.Processing.ProcessingJobStatus? parsed)
+{
+    parsed = null;
+    if (string.IsNullOrWhiteSpace(status))
+    {
+        return true;
+    }
+
+    parsed = status.ToLowerInvariant() switch
+    {
+        "queued" => CenteralES.Processing.ProcessingJobStatus.Queued,
+        "processing" => CenteralES.Processing.ProcessingJobStatus.Processing,
+        "completed" => CenteralES.Processing.ProcessingJobStatus.Completed,
+        "failed" => CenteralES.Processing.ProcessingJobStatus.Failed,
+        "blocked" => CenteralES.Processing.ProcessingJobStatus.Blocked,
+        "cancelled" => CenteralES.Processing.ProcessingJobStatus.Cancelled,
+        _ => null
+    };
+
+    return parsed is not null;
+}
+
+static AdminJobListItemResponse ToAdminJobListItemResponse(AdminProcessingJobListItem job)
+{
+    return new AdminJobListItemResponse(
+        job.JobId.ToString("N"),
+        job.SubjectId.ToString("N"),
+        job.Capability,
+        job.ContentHash,
+        job.AttemptNumber,
+        ToPublicStatus(job.Status),
+        job.CreatedAt,
+        job.StartedAt,
+        job.FinishedAt,
+        job.Endpoint,
+        job.NormalizedError?.ToString(),
+        job.Retryable,
+        job.CorrelationId);
+}
+
+static AdminJobDetailsResponse ToAdminJobDetailsResponse(AdminProcessingJobDetails job)
+{
+    return new AdminJobDetailsResponse(
+        job.JobId.ToString("N"),
+        job.SubjectId.ToString("N"),
+        job.Capability,
+        job.ContentHash,
+        job.TemporaryFileKey,
+        job.AttemptNumber,
+        ToPublicStatus(job.Status),
+        job.ScheduledAt,
+        job.StartedAt,
+        job.FinishedAt,
+        job.HeartbeatAt,
+        job.CreatedAt,
+        job.UpdatedAt,
+        new AdminAttemptDiagnosticsResponse(
+            job.Endpoint,
+            job.Duration?.TotalMilliseconds,
+            job.HttpStatus,
+            job.NormalizedError?.ToString(),
+            job.Retryable,
+            job.RawErrorExcerpt,
+            job.CorrelationId),
+        job.Attempts.Select(ToAdminProcessingAttemptResponse).ToArray());
+}
+
+static AdminProcessingAttemptResponse ToAdminProcessingAttemptResponse(AdminProcessingAttemptDetails attempt)
+{
+    return new AdminProcessingAttemptResponse(
+        attempt.JobId.ToString("N"),
+        attempt.AttemptNumber,
+        ToPublicStatus(attempt.Status),
+        attempt.CreatedAt,
+        attempt.StartedAt,
+        attempt.FinishedAt,
+        attempt.Endpoint,
+        attempt.Duration?.TotalMilliseconds,
+        attempt.HttpStatus,
+        attempt.NormalizedError?.ToString(),
+        attempt.Retryable,
+        attempt.CorrelationId);
+}
+
+static AdminProcessorStatusResponse ToAdminProcessorStatusResponse(AdminProcessorStatus status)
+{
+    return new AdminProcessorStatusResponse(
+        status.ProcessorKey,
+        status.Capability,
+        status.Health,
+        new AdminProcessorQueueCountsResponse(
+            status.Queue.Queued,
+            status.Queue.Processing,
+            status.Queue.Completed,
+            status.Queue.Failed,
+            status.Queue.Blocked,
+            status.Queue.Cancelled),
+        status.Workers.Select(ToAdminProcessorWorkerStatusResponse).ToArray(),
+        status.RecentDiagnostics.Select(ToAdminProcessorRecentDiagnosticResponse).ToArray());
+}
+
+static AdminProcessorWorkerStatusResponse ToAdminProcessorWorkerStatusResponse(AdminProcessorWorkerStatus worker)
+{
+    return new AdminProcessorWorkerStatusResponse(
+        worker.WorkerId,
+        worker.StartedAt,
+        worker.HeartbeatAt,
+        worker.Stale);
+}
+
+static AdminProcessorRecentDiagnosticResponse ToAdminProcessorRecentDiagnosticResponse(AdminProcessorRecentDiagnostic diagnostic)
+{
+    return new AdminProcessorRecentDiagnosticResponse(
+        diagnostic.JobId.ToString("N"),
+        diagnostic.AttemptNumber,
+        ToPublicStatus(diagnostic.Status),
+        diagnostic.Endpoint,
+        diagnostic.HttpStatus,
+        diagnostic.NormalizedError?.ToString(),
+        diagnostic.Retryable,
+        diagnostic.CorrelationId,
+        diagnostic.CreatedAt);
+}
+
 internal sealed record HealthResponse(string Status, DateTimeOffset CheckedAt);
+
+internal sealed record ReadyHealthResponse(
+    string Status,
+    DateTimeOffset CheckedAt,
+    IReadOnlyList<HealthCheckItemResponse> Checks);
+
+internal sealed record HealthCheckItemResponse(
+    string Name,
+    string Status);
 
 internal sealed record PdfJobResponse(
     string Hash,
@@ -236,5 +555,95 @@ internal sealed record ApiErrorResponse(ApiError Error)
 }
 
 internal sealed record ApiError(string Code, string Message, object? Details, string CorrelationId);
+
+internal sealed record AdminJobListResponse(IReadOnlyList<AdminJobListItemResponse> Jobs);
+
+internal sealed record AdminJobListItemResponse(
+    string JobId,
+    string SubjectId,
+    string Capability,
+    string Hash,
+    int AttemptNumber,
+    string Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? FinishedAt,
+    string? Endpoint,
+    string? NormalizedError,
+    bool? Retryable,
+    string? CorrelationId);
+
+internal sealed record AdminJobDetailsResponse(
+    string JobId,
+    string SubjectId,
+    string Capability,
+    string Hash,
+    string TemporaryFileKey,
+    int AttemptNumber,
+    string Status,
+    DateTimeOffset ScheduledAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? FinishedAt,
+    DateTimeOffset? HeartbeatAt,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    AdminAttemptDiagnosticsResponse Diagnostics,
+    IReadOnlyList<AdminProcessingAttemptResponse> Attempts);
+
+internal sealed record AdminAttemptDiagnosticsResponse(
+    string? Endpoint,
+    double? DurationMs,
+    int? HttpStatus,
+    string? NormalizedError,
+    bool? Retryable,
+    string? RawErrorExcerpt,
+    string? CorrelationId);
+
+internal sealed record AdminProcessingAttemptResponse(
+    string JobId,
+    int AttemptNumber,
+    string Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? FinishedAt,
+    string? Endpoint,
+    double? DurationMs,
+    int? HttpStatus,
+    string? NormalizedError,
+    bool? Retryable,
+    string? CorrelationId);
+
+internal sealed record AdminProcessorStatusResponse(
+    string ProcessorKey,
+    string Capability,
+    string Health,
+    AdminProcessorQueueCountsResponse Queue,
+    IReadOnlyList<AdminProcessorWorkerStatusResponse> Workers,
+    IReadOnlyList<AdminProcessorRecentDiagnosticResponse> RecentDiagnostics);
+
+internal sealed record AdminProcessorQueueCountsResponse(
+    int Queued,
+    int Processing,
+    int Completed,
+    int Failed,
+    int Blocked,
+    int Cancelled);
+
+internal sealed record AdminProcessorWorkerStatusResponse(
+    string WorkerId,
+    DateTimeOffset StartedAt,
+    DateTimeOffset HeartbeatAt,
+    bool Stale);
+
+internal sealed record AdminProcessorRecentDiagnosticResponse(
+    string JobId,
+    int AttemptNumber,
+    string Status,
+    string? Endpoint,
+    int? HttpStatus,
+    string? NormalizedError,
+    bool? Retryable,
+    string CorrelationId,
+    DateTimeOffset CreatedAt);
 
 public partial class Program;

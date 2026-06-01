@@ -16,4 +16,11 @@ public sealed class PostgresProcessingSqlTests
         Assert.Contains("create table if not exists processing_result_index", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("create table if not exists processing_attempt_diagnostics", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Schema_contains_worker_heartbeat_table_for_admin_status()
+    {
+        Assert.Contains("create table if not exists processing_worker_heartbeats", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ix_processing_worker_heartbeats_processor", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+    }
 }

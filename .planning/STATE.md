@@ -5,7 +5,7 @@
 See: `.planning/PROJECT.md` (updated 2026-05-31)
 
 **Core value:** Клиент ЭП должен надёжно отправить PDF, не зависнуть на долгой обработке и получить результат или понятный статус по hash/job.  
-**Current focus:** Phase 1 — Walking Skeleton PDF Processing
+**Current focus:** Phase 2 — Security, Retry, Health, Admin Actions
 
 ## Source of Truth
 
@@ -30,21 +30,20 @@ Primary notes:
 ## Current Phase
 
 ```text
-Phase 1: Walking Skeleton PDF Processing
+Phase 2: Security, Retry, Health, Admin Actions
 ```
 
 Plan:
 
 ```text
-.planning/phases/001-walking-skeleton-pdf-processing/PLAN.md
+Start with API key model and Public API auth middleware.
 ```
 
 ## Current Open External Facts
 
-- точный successful JSON-контракт `https://pdf2txt.selectel.dt1520.ru/recognize_json/`;
-- фактический HTTP status/body для нулевого файла как возможного `InvalidInputProbe`.
+- none for the current Phase 2 entry task.
 
-These facts are discovery tasks inside Phase 1, not blockers for GSD planning.
+The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Модули и обработчики/PDF Stamp Recognition.md`.
 
 ## Implementation Checkpoints
 
@@ -56,6 +55,31 @@ These facts are discovery tasks inside Phase 1, not blockers for GSD planning.
 - 2026-05-31: Public status read-model added: `GET /api/pdf-stamp-recognition/results/{hash}` returns `202` for active jobs and `GET /api/jobs/{jobId}` returns sanitized job status; integration DB tests run sequentially to avoid shared-database truncation races.
 - 2026-05-31: Local temporary PDF storage abstraction added; Web stores uploaded input by content-hash key before enqueue using configurable `Storage:TemporaryRoot`.
 - 2026-05-31: Worker now reads the queued temporary PDF stream through `ITemporaryFileStore`, passes it to the recognizer boundary, completes the job, and deletes the temporary file after successful completion.
+- 2026-06-01: .NET SDK 9.0.314 installed per-user; first real `HttpPdfStampRecognizer` boundary added next to fake recognizer with endpoint pool options, multipart upload, raw successful JSON payload preservation, normalized adapter exceptions, and fake-HTTP unit coverage.
+- 2026-06-01: `processor_overloaded` now defers the claimed job back to PostgreSQL queue instead of creating a failed attempt; integration tests tolerate missing local `db.env`/`test_db` by skipping DB-backed assertions.
+- 2026-06-01: Minimal Admin read-only job visibility added through `GET /api/admin/jobs` and `GET /api/admin/jobs/{jobId}` backed by PostgreSQL read models; full test suite passes against local PostgreSQL.
+- 2026-06-01: Minimal Admin processor passive status added through `GET /api/admin/processors/pdf2txt-http-recognizer`, including queue counts and recent diagnostics without calling the external processor.
+- 2026-06-01: External `pdf2txt` zero-byte discovery completed: `/recognize_json/` is reachable and returns `HTTP 200` JSON with expected validation errors for an empty PDF, so `InvalidInputProbe` is viable as a separate diagnostic scenario.
+- 2026-06-01: External `pdf2txt` successful smoke shape captured with a generated one-page PDF without stamp: `HTTP 200` JSON with empty `errors`, `workers`, `unrecognized_pages`, `workers_page`, and empty `izm_number`.
+- 2026-06-01: Worker terminal adapter failures now use `ProcessorErrorClassifier`; non-retryable failures are marked final and clean temporary PDF input after the queue state is persisted.
+- 2026-06-01: Web upload size guard added for PDF jobs through `PdfStampRecognition:MaxUploadBytes` with default `250 MiB`, hard cap `500 MiB`, and `413 payload_too_large` response.
+- 2026-06-01: Admin Job Details now includes `attempts[]` for the processing subject, exposing attempt history for support/admin visibility.
+- 2026-06-01: Local `test.pdf` added as ignored manual pdf2txt sample; external smoke returned `HTTP 200`, top-level result fields, `workers` count 3, and `workers_page` keys 2/3/15 without recording payload values in Git.
+- 2026-06-01: `HttpPdfStampRecognizer` now treats `HTTP 200` JSON responses with non-empty `errors` as normalized `InvalidInput` instead of saving them as successful result payloads.
+- 2026-06-01: Retryable processor failures now schedule a new queued attempt on the same processing subject and temporary file with fixed 30 second retry delay; old attempt keeps failed diagnostics.
+- 2026-06-01: Worker now enforces skeleton `maxAttempts = 5`; retryable failures at the limit become terminal `blocked` and clean temporary input.
+- 2026-06-01: Worker retry options are now configuration-backed through `PdfStampRecognition:Processor:maxAttempts` and `processorOverloadedDelay` while keeping MVP defaults 5 and 15 seconds.
+- 2026-06-01: Web and Worker now use console logging explicitly for local/Docker-friendly runs, avoiding Windows EventLog write failures under non-admin accounts.
+- 2026-06-01: Generic worker `InternalError` now follows retry classification: non-transient internal failures become terminal `blocked` and clean temporary input instead of creating an endless retry loop.
+- 2026-06-01: Local web+worker smoke passed against PostgreSQL with fake pdf2txt: upload accepted, worker completed the job, and result polling returned `source=fake-pdf2txt`.
+- 2026-06-01: PostgreSQL worker heartbeat added through `processing_worker_heartbeats`; Worker writes heartbeat every 30 seconds and Admin processor status now includes `workers[]` plus health derived from fresh/stale heartbeats.
+- 2026-06-01: Local web+worker smoke passed again after heartbeat integration.
+- 2026-06-01: Processing job heartbeat refresh added: Worker now updates `processing_jobs.heartbeat_at` while a claimed job is running, backed by `RefreshHeartbeatAsync` and PostgreSQL integration coverage.
+- 2026-06-01: Local web+worker smoke passed again after job-level heartbeat integration.
+- 2026-06-01: Web `/health/ready` now performs real passive readiness checks for PostgreSQL and temporary storage without calling external processors; integration tests set only test-process `SSL Mode=Disable` for the local Windows PostgreSQL handshake issue, leaving `db.env` untouched.
+- 2026-06-01: Local web+worker smoke now checks `/health/ready` before upload and passed after readiness integration.
+- 2026-06-01: Web `/health/ready` now also verifies minimal processing schema compatibility by checking required processing/result/worker heartbeat tables; local smoke passed with the schema check enabled.
+- 2026-06-01: Phase 1 backend checkpoint recorded in requirements/roadmap; next implementation focus is Phase 2 API key auth for Public API.
 
 ## Workflow Rules
 
@@ -65,4 +89,4 @@ These facts are discovery tasks inside Phase 1, not blockers for GSD planning.
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-05-31 after Worker temporary-file processing checkpoint*
+*Last updated: 2026-06-01 after Phase 1 backend checkpoint*

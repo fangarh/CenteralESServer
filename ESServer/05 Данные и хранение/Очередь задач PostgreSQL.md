@@ -137,7 +137,10 @@ abandoned
 
 ## Heartbeat
 
-Так как обработка может длиться больше 5 минут, worker должен обновлять heartbeat.
+Так как обработка может длиться больше 5 минут, нужны два heartbeat:
+
+- worker heartbeat показывает, что процесс Worker жив;
+- job heartbeat показывает, что конкретная `processing` job ещё удерживается активным Worker-ом.
 
 Baseline MVP:
 
@@ -145,6 +148,13 @@ Baseline MVP:
 heartbeat interval: 30 seconds
 stale heartbeat threshold: 3 minutes
 ```
+
+В текущем skeleton:
+
+- `CenteralES.Worker` пишет worker heartbeat в `processing_worker_heartbeats`;
+- при `ClaimNext` очередь выставляет `processing_jobs.heartbeat_at`;
+- пока job обрабатывается, Worker периодически обновляет `processing_jobs.heartbeat_at` через `RefreshHeartbeatAsync`;
+- `Complete`, `Fail` и `Defer` завершают или возвращают job в очередь, поэтому дальнейший job heartbeat не нужен.
 
 Если heartbeat давно не обновлялся:
 

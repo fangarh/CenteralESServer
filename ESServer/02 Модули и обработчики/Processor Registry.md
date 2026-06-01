@@ -55,6 +55,8 @@ resultStore: PdfStampRecognitionResultStore
 settingsSchema: endpointPool, timeout, maxAttempts, poolConcurrencyLimit, endpointConcurrencyLimit
 ```
 
+В текущем кодовом skeleton adapter class называется `HttpPdfStampRecognizer`. Это первая boundary-реализация для `pdf2txt-http-recognizer`; полноценный DB-backed Processor Registry остаётся следующим расширением.
+
 ### Processor Instance
 
 Описывает runtime-настройку в конкретной поставке.

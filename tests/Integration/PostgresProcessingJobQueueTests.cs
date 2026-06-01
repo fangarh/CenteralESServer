@@ -3,6 +3,7 @@ using CenteralES.Infrastructure.PdfStampRecognition;
 using CenteralES.Infrastructure.Processing;
 using CenteralES.Processing;
 using CenteralES.Processing.Queue;
+using CenteralES.Processing.Workers;
 using CenteralES.PdfStampRecognition;
 using Npgsql;
 
@@ -13,13 +14,12 @@ public sealed class PostgresProcessingJobQueueTests
     [Fact]
     public async Task Enqueue_deduplicates_active_job_and_claims_it()
     {
-        var envPath = Path.Combine(GetRepositoryRoot(), "db.env");
-        if (!File.Exists(envPath))
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
         {
             return;
         }
 
-        var connectionString = PostgresConnectionString.ReadFromEnvFile(envPath, "test_db");
         var bootstrapper = new PostgresDatabaseBootstrapper();
 
         await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
@@ -49,13 +49,12 @@ public sealed class PostgresProcessingJobQueueTests
     [Fact]
     public async Task Completed_job_can_store_and_read_pdf_result()
     {
-        var envPath = Path.Combine(GetRepositoryRoot(), "db.env");
-        if (!File.Exists(envPath))
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
         {
             return;
         }
 
-        var connectionString = PostgresConnectionString.ReadFromEnvFile(envPath, "test_db");
         var bootstrapper = new PostgresDatabaseBootstrapper();
 
         await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
@@ -110,11 +109,204 @@ public sealed class PostgresProcessingJobQueueTests
         Assert.Contains("integration-test", loaded.PayloadJson, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Deferred_job_returns_to_queue_and_is_not_claimed_before_schedule()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var now = DateTimeOffset.UtcNow;
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var command = new CreateProcessingJobCommand(
+            PdfStampRecognitionConstants.Capability,
+            $"sha256:{Guid.NewGuid():N}",
+            $"temp/{Guid.NewGuid():N}.pdf",
+            now);
+
+        var enqueued = await queue.EnqueueAsync(command, CancellationToken.None);
+        var claimed = await queue.ClaimNextAsync(now.AddSeconds(1), CancellationToken.None);
+
+        Assert.NotNull(claimed);
+
+        await queue.DeferAsync(
+            new DeferProcessingJobCommand(
+                claimed.JobId,
+                claimed.SubjectId,
+                now.AddSeconds(30),
+                now.AddSeconds(2)),
+            CancellationToken.None);
+
+        var earlyClaim = await queue.ClaimNextAsync(now.AddSeconds(10), CancellationToken.None);
+        var laterClaim = await queue.ClaimNextAsync(now.AddSeconds(31), CancellationToken.None);
+
+        Assert.Null(earlyClaim);
+        Assert.NotNull(laterClaim);
+        Assert.Equal(enqueued.JobId, laterClaim.JobId);
+        Assert.Equal(claimed.AttemptNumber, laterClaim.AttemptNumber);
+    }
+
+    [Fact]
+    public async Task Processing_job_heartbeat_can_be_refreshed()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var now = DateTimeOffset.UtcNow;
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var adminStore = new PostgresAdminProcessingReadStore(dataSource);
+        var command = new CreateProcessingJobCommand(
+            PdfStampRecognitionConstants.Capability,
+            $"sha256:{Guid.NewGuid():N}",
+            $"temp/{Guid.NewGuid():N}.pdf",
+            now);
+
+        var enqueued = await queue.EnqueueAsync(command, CancellationToken.None);
+        var claimed = await queue.ClaimNextAsync(now.AddSeconds(1), CancellationToken.None);
+
+        Assert.NotNull(claimed);
+
+        var heartbeatAt = now.AddMinutes(2);
+        await queue.RefreshHeartbeatAsync(
+            new RefreshProcessingJobHeartbeatCommand(claimed.JobId, heartbeatAt),
+            CancellationToken.None);
+
+        var details = await adminStore.GetJobAsync(enqueued.JobId, CancellationToken.None);
+
+        Assert.NotNull(details);
+        Assert.Equal(ProcessingJobStatus.Processing, details.Status);
+        Assert.NotNull(details.HeartbeatAt);
+        Assert.Equal(heartbeatAt.ToUnixTimeMilliseconds(), details.HeartbeatAt.Value.ToUnixTimeMilliseconds());
+    }
+
+    [Fact]
+    public async Task Retryable_failure_schedules_next_attempt_for_same_temporary_file()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var now = DateTimeOffset.UtcNow;
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var command = new CreateProcessingJobCommand(
+            PdfStampRecognitionConstants.Capability,
+            $"sha256:{Guid.NewGuid():N}",
+            $"temp/{Guid.NewGuid():N}.pdf",
+            now);
+
+        var enqueued = await queue.EnqueueAsync(command, CancellationToken.None);
+        var claimed = await queue.ClaimNextAsync(now.AddSeconds(1), CancellationToken.None);
+
+        Assert.NotNull(claimed);
+
+        await queue.FailAsync(
+            new FailProcessingJobCommand(
+                claimed.JobId,
+                claimed.SubjectId,
+                NormalizedProcessorError.ProcessorTimeout,
+                Final: false,
+                new AttemptDiagnostics(
+                    Endpoint: "https://pdf2txt.local/recognize_json/",
+                    Duration: TimeSpan.FromSeconds(30),
+                    HttpStatus: null,
+                    NormalizedError: NormalizedProcessorError.ProcessorTimeout,
+                    Retryable: true,
+                    CorrelationId: "corr-retry",
+                    RawErrorExcerpt: "Processor request timed out."),
+                now.AddSeconds(2)),
+            CancellationToken.None);
+
+        var current = await queue.GetCurrentByHashAsync(PdfStampRecognitionConstants.Capability, command.ContentHash, CancellationToken.None);
+        var earlyClaim = await queue.ClaimNextAsync(now.AddSeconds(10), CancellationToken.None);
+        var retryClaim = await queue.ClaimNextAsync(now.AddSeconds(33), CancellationToken.None);
+
+        Assert.NotNull(current);
+        Assert.NotEqual(enqueued.JobId, current.JobId);
+        Assert.Equal(2, current.AttemptNumber);
+        Assert.Equal(ProcessingJobStatus.Queued, current.Status);
+        Assert.Null(earlyClaim);
+        Assert.NotNull(retryClaim);
+        Assert.Equal(current.JobId, retryClaim.JobId);
+        Assert.Equal(claimed.TemporaryFileKey, retryClaim.TemporaryFileKey);
+        Assert.Equal(2, retryClaim.AttemptNumber);
+    }
+
+    [Fact]
+    public async Task Worker_heartbeat_is_visible_in_admin_processor_status()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var workerId = $"integration-worker-{Guid.NewGuid():N}";
+        var now = DateTimeOffset.UtcNow;
+        var heartbeatStore = new PostgresWorkerHeartbeatStore(dataSource);
+        var adminStore = new PostgresAdminProcessingReadStore(dataSource);
+
+        await heartbeatStore.HeartbeatAsync(
+            new HeartbeatWorkerCommand(
+                workerId,
+                PdfStampRecognitionConstants.ProcessorKey,
+                PdfStampRecognitionConstants.Capability,
+                now.AddMinutes(-1),
+                now),
+            CancellationToken.None);
+
+        var status = await adminStore.GetProcessorStatusAsync(
+            PdfStampRecognitionConstants.ProcessorKey,
+            PdfStampRecognitionConstants.Capability,
+            recentDiagnosticsLimit: 10,
+            CancellationToken.None);
+
+        Assert.Equal("healthy", status.Health);
+        var worker = Assert.Single(status.Workers);
+        Assert.Equal(workerId, worker.WorkerId);
+        Assert.False(worker.Stale);
+    }
+
     private static async Task ResetProcessingTablesAsync(NpgsqlDataSource dataSource, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = new NpgsqlCommand("""
             truncate table
+                processing_worker_heartbeats,
                 pdf_stamp_recognition_results,
                 processing_attempt_diagnostics,
                 processing_result_index,
@@ -123,22 +315,5 @@ public sealed class PostgresProcessingJobQueueTests
             cascade;
             """, connection);
         await command.ExecuteNonQueryAsync(cancellationToken);
-    }
-
-    private static string GetRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "CenteralESServer.sln")))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException("Repository root was not found.");
     }
 }

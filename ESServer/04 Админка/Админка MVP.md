@@ -111,6 +111,18 @@ PDF обработчик не отвечает
 
 Список возможностей и обработчиков.
 
+Текущий skeleton read-only API:
+
+```http
+GET /api/admin/processors/pdf2txt-http-recognizer
+```
+
+Endpoint показывает passive status для processor-а без активного вызова внешнего `/recognize_json/`: capability, processor key, health, queue counts, worker heartbeats и последние diagnostics. Активные health/probe действия откладываются до подтверждения безопасного diagnostic сценария.
+
+Если worker heartbeats отсутствуют, processor health остаётся `unknown`. Если есть хотя бы один свежий worker heartbeat, skeleton возвращает `healthy`; если все worker heartbeat старше `3 minutes`, возвращает `unhealthy`.
+
+Для `pdf2txt-http-recognizer` 2026-06-01 подтверждён безопасный диагностический сценарий `InvalidInputProbe`: отправка нулевого PDF возвращает `HTTP 200` с ожидаемыми validation errors. В Phase 1 этот факт только зафиксирован; кнопка активной проверки и audit такого действия остаются за пределами текущего skeleton.
+
 Для каждого:
 
 - название capability;
@@ -118,6 +130,7 @@ PDF обработчик не отвечает
 - включён или выключен;
 - health;
 - последние ошибки;
+- worker-ы и stale heartbeat;
 - текущая очередь;
 - лимит параллельности;
 - быстрые действия.
@@ -164,6 +177,17 @@ endpoint concurrency limit
 ## Jobs
 
 Очередь и история задач.
+
+Текущий skeleton read-only API:
+
+```http
+GET /api/admin/jobs?capability=&status=&hash=&limit=
+GET /api/admin/jobs/{jobId}
+```
+
+Эти endpoint-ы дают минимальную эксплуатационную видимость для Phase 1: статус, capability, hash, attempt number, timestamps, endpoint, normalized error, retryable и correlationId. Они не выполняют retry/cancel и не раскрывают входной PDF или secrets.
+
+`GET /api/admin/jobs/{jobId}` также возвращает `attempts[]` по subject-у, чтобы Job Details мог показать цепочку попыток для одного hash/job flow.
 
 Фильтры:
 

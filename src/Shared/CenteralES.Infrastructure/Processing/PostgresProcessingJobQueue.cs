@@ -6,6 +6,7 @@ namespace CenteralES.Infrastructure.Processing;
 
 public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
 {
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(30);
     private readonly NpgsqlDataSource _dataSource;
 
     public PostgresProcessingJobQueue(NpgsqlDataSource dataSource)
@@ -135,6 +136,7 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
         {
+            await reader.DisposeAsync();
             await transaction.CommitAsync(cancellationToken);
             return null;
         }
@@ -151,6 +153,24 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         await transaction.CommitAsync(cancellationToken);
 
         return claimed;
+    }
+
+    public async Task RefreshHeartbeatAsync(RefreshProcessingJobHeartbeatCommand command, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var update = new NpgsqlCommand("""
+            update processing_jobs
+            set heartbeat_at = @heartbeat_at,
+                updated_at = @heartbeat_at
+            where id = @job_id
+              and status = 'processing';
+            """, connection);
+        update.Parameters.AddWithValue("heartbeat_at", command.HeartbeatAt);
+        update.Parameters.AddWithValue("job_id", command.JobId);
+
+        await update.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public async Task<ProcessingJobSnapshot?> GetCurrentByHashAsync(string capability, string contentHash, CancellationToken cancellationToken)
@@ -253,6 +273,39 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         await transaction.CommitAsync(cancellationToken);
     }
 
+    public async Task DeferAsync(DeferProcessingJobCommand command, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        await using var updateJob = new NpgsqlCommand("""
+            update processing_jobs
+            set status = 'queued',
+                scheduled_at = @scheduled_at,
+                heartbeat_at = null,
+                updated_at = @deferred_at
+            where id = @job_id;
+            """, connection, transaction);
+        updateJob.Parameters.AddWithValue("scheduled_at", command.ScheduledAt);
+        updateJob.Parameters.AddWithValue("deferred_at", command.DeferredAt);
+        updateJob.Parameters.AddWithValue("job_id", command.JobId);
+        await updateJob.ExecuteNonQueryAsync(cancellationToken);
+
+        await using var updateSubject = new NpgsqlCommand("""
+            update processing_subjects
+            set state = 'queued',
+                updated_at = @deferred_at
+            where id = @subject_id;
+            """, connection, transaction);
+        updateSubject.Parameters.AddWithValue("deferred_at", command.DeferredAt);
+        updateSubject.Parameters.AddWithValue("subject_id", command.SubjectId);
+        await updateSubject.ExecuteNonQueryAsync(cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     public async Task FailAsync(FailProcessingJobCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -260,6 +313,7 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
+        var failedJob = await GetJobForRetryAsync(connection, transaction, command.JobId, cancellationToken);
         var status = command.Final ? "blocked" : "failed";
 
         await using var updateJob = new NpgsqlCommand("""
@@ -281,6 +335,63 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         };
         await UpsertDiagnosticsAsync(connection, transaction, command.JobId, diagnostics, command.FinishedAt, cancellationToken);
 
+        if (!command.Final)
+        {
+            var retryJobId = Guid.NewGuid();
+            var retryAttemptNumber = failedJob.AttemptNumber + 1;
+            var scheduledAt = command.FinishedAt.Add(RetryDelay);
+
+            await using var insertRetry = new NpgsqlCommand("""
+                insert into processing_jobs (
+                    id,
+                    subject_id,
+                    capability,
+                    content_hash,
+                    temporary_file_key,
+                    attempt_number,
+                    status,
+                    scheduled_at,
+                    created_at,
+                    updated_at)
+                values (
+                    @id,
+                    @subject_id,
+                    @capability,
+                    @content_hash,
+                    @temporary_file_key,
+                    @attempt_number,
+                    'queued',
+                    @scheduled_at,
+                    @created_at,
+                    @updated_at);
+                """, connection, transaction);
+            insertRetry.Parameters.AddWithValue("id", retryJobId);
+            insertRetry.Parameters.AddWithValue("subject_id", command.SubjectId);
+            insertRetry.Parameters.AddWithValue("capability", failedJob.Capability);
+            insertRetry.Parameters.AddWithValue("content_hash", failedJob.ContentHash);
+            insertRetry.Parameters.AddWithValue("temporary_file_key", failedJob.TemporaryFileKey);
+            insertRetry.Parameters.AddWithValue("attempt_number", retryAttemptNumber);
+            insertRetry.Parameters.AddWithValue("scheduled_at", scheduledAt);
+            insertRetry.Parameters.AddWithValue("created_at", command.FinishedAt);
+            insertRetry.Parameters.AddWithValue("updated_at", command.FinishedAt);
+            await insertRetry.ExecuteNonQueryAsync(cancellationToken);
+
+            await using var updateSubjectForRetry = new NpgsqlCommand("""
+                update processing_subjects
+                set current_job_id = @current_job_id,
+                    state = 'queued',
+                    updated_at = @finished_at
+                where id = @subject_id;
+                """, connection, transaction);
+            updateSubjectForRetry.Parameters.AddWithValue("current_job_id", retryJobId);
+            updateSubjectForRetry.Parameters.AddWithValue("finished_at", command.FinishedAt);
+            updateSubjectForRetry.Parameters.AddWithValue("subject_id", command.SubjectId);
+            await updateSubjectForRetry.ExecuteNonQueryAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+            return;
+        }
+
         await using var updateSubject = new NpgsqlCommand("""
             update processing_subjects
             set state = @status,
@@ -293,6 +404,37 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         await updateSubject.ExecuteNonQueryAsync(cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    private static async Task<JobForRetry> GetJobForRetryAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid jobId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new NpgsqlCommand("""
+            select
+                capability,
+                content_hash,
+                temporary_file_key,
+                attempt_number
+            from processing_jobs
+            where id = @job_id
+            for update;
+            """, connection, transaction);
+        command.Parameters.AddWithValue("job_id", jobId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            throw new InvalidOperationException($"Processing job '{jobId}' was not found.");
+        }
+
+        return new JobForRetry(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetInt32(3));
     }
 
     private static async Task<ExistingSubject?> FindSubjectAsync(
@@ -406,6 +548,12 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         Guid? CurrentJobId,
         int? CurrentAttemptNumber,
         string? CurrentJobStatus);
+
+    private sealed record JobForRetry(
+        string Capability,
+        string ContentHash,
+        string TemporaryFileKey,
+        int AttemptNumber);
 
     private static async Task UpsertDiagnosticsAsync(
         NpgsqlConnection connection,

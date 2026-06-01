@@ -89,6 +89,14 @@ GET /health/ready
 
 `/health/ready` не вызывает внешние processor-ы и не запускает обработку файлов.
 
+Текущий skeleton реализует минимальную версию readiness:
+
+- PostgreSQL `select 1`;
+- наличие обязательных processing/result/worker heartbeat таблиц;
+- temporary storage write/read/delete probe.
+
+Явная таблица версий схемы, result storage как отдельная категория и storage capacity thresholds остаются следующим расширением health surface.
+
 ### Worker health
 
 `CenteralES.Worker` не публикуется как внешний HTTP-сервис. Для Docker health-check в MVP достаточно одного из двух технических вариантов:
@@ -116,6 +124,19 @@ Worker считается живым, если:
 - worker имеет доступ к result storage.
 
 Worker пишет heartbeat в PostgreSQL каждые `30 seconds`. Если heartbeat не обновлялся дольше `3 minutes`, админка считает worker stale/unhealthy.
+
+Текущий skeleton хранит heartbeat в таблице `processing_worker_heartbeats`:
+
+```text
+worker_id
+processor_key
+capability
+started_at
+heartbeat_at
+updated_at
+```
+
+`CenteralES.Worker` генерирует runtime `worker_id` при старте процесса и обновляет запись для `pdf2txt-http-recognizer`. Admin processor status читает эти записи пассивно, без вызова внешнего processor-а.
 
 ### Health status
 

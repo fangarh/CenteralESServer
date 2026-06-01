@@ -68,6 +68,18 @@ public static class PostgresProcessingSql
             contract_version text not null,
             created_at timestamptz not null
         );
+
+        create table if not exists processing_worker_heartbeats (
+            worker_id text primary key,
+            processor_key text not null,
+            capability text not null,
+            started_at timestamptz not null,
+            heartbeat_at timestamptz not null,
+            updated_at timestamptz not null
+        );
+
+        create index if not exists ix_processing_worker_heartbeats_processor
+            on processing_worker_heartbeats (processor_key, capability, heartbeat_at desc);
         """;
 
     public const string ClaimNext = """

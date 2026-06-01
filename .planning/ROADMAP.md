@@ -10,7 +10,7 @@
 ### Phase 1: Walking Skeleton PDF Processing
 
 **Mode:** mvp  
-**Status:** In Progress  
+**Status:** Backend checkpoint complete  
 **Plan:** `.planning/phases/001-walking-skeleton-pdf-processing/PLAN.md`
 
 Сквозной slice:
@@ -34,7 +34,7 @@ Scope:
 
 ### Phase 2: Security, Retry, Health, Admin Actions
 
-**Status:** Pending
+**Status:** Next
 
 Scope:
 
@@ -42,7 +42,7 @@ Scope:
 - admin login/session/CSRF baseline;
 - manual retry одной задачи;
 - audit для admin actions;
-- health live/ready и Worker heartbeat;
+- health live/ready и Worker heartbeat; baseline already implemented in Phase 1, remaining work is hardening/admin visibility;
 - temporary storage hard/soft limit behavior;
 - blocked/final failure handling;
 - support report MVP.
@@ -94,4 +94,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-05-31 after GSD initialization*
+*Last updated: 2026-06-01 after Phase 1 backend checkpoint*

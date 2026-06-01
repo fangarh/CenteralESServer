@@ -102,6 +102,22 @@ exponential_backoff
 
 Для MVP можно начать с fixed delay.
 
+Текущее состояние skeleton:
+
+```text
+retryDelay: 30 seconds
+strategy: fixed_delay
+maxAttempts: 5
+processorOverloadedDelay: 15 seconds
+afterMaxAttempts: blocked/admin_required
+```
+
+Если Worker получает retryable processor error, текущая job фиксируется как `failed` с diagnostics, а очередь создаёт новую `queued` job для того же `ProcessingSubject`, `content_hash` и `temporary_file_key` с `attemptNumber + 1`. `processing_subjects.current_job_id` переводится на новую попытку, поэтому Public API снова видит активную обработку.
+
+Если ошибка non-retryable или текущая попытка достигла `maxAttempts`, subject переводится в terminal `blocked`, и Worker чистит временный PDF после записи состояния очереди.
+
+`processor_overloaded` обрабатывается отдельно: это не failed attempt, а defer текущей job обратно в `queued` с коротким `scheduled_at`.
+
 ## After max attempts
 
 Поведение после исчерпания попыток настраивается.
@@ -158,6 +174,8 @@ internal_error -> depends on transient flag
 ```
 
 `processor_overloaded` означает, что все endpoint-ы processor pool заняты. Это не ошибка обработки и не failed attempt; job остаётся в очереди или получает короткий `scheduled_at` delay.
+
+В текущем skeleton `internal_error` считается non-transient по умолчанию. Worker помечает такую попытку terminal/blocked, пишет diagnostics и чистит временный PDF, чтобы не создавать бесконечный retry loop для ошибок приложения или потерянного temporary storage.
 
 `processor_contract_error` retry-ится ограниченно, но обязательно подсвечивается в админке как возможное изменение внешнего сервиса или нарушение ожидаемого JSON-контракта.
 

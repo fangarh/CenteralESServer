@@ -7,16 +7,16 @@
 
 ### Architecture
 
-- [ ] **ARCH-01**: Solution разделён на Web, Worker, модули домена/application/infrastructure и tests.
-- [ ] **ARCH-02**: Реализация не использует Entity Framework.
-- [ ] **ARCH-03**: Основные бизнес-операции покрываются TDD-тестами до или вместе с реализацией.
+- [x] **ARCH-01**: Solution разделён на Web, Worker, модули домена/application/infrastructure и tests.
+- [x] **ARCH-02**: Реализация не использует Entity Framework.
+- [x] **ARCH-03**: Основные бизнес-операции покрываются TDD-тестами до или вместе с реализацией.
 
 ### Public API
 
-- [ ] **API-01**: `POST /api/pdf-stamp-recognition/jobs` принимает PDF и возвращает `200` для готового результата или `202` для активной обработки.
-- [ ] **API-02**: `GET /api/pdf-stamp-recognition/results/{hash}` возвращает `200`, `202` или `404` по согласованному контракту.
-- [ ] **API-03**: `GET /api/jobs/{jobId}` возвращает статус конкретной попытки без raw errors.
-- [ ] **API-04**: Public API использует единый формат ошибок с `correlationId`.
+- [x] **API-01**: `POST /api/pdf-stamp-recognition/jobs` принимает PDF и возвращает `200` для готового результата или `202` для активной обработки.
+- [x] **API-02**: `GET /api/pdf-stamp-recognition/results/{hash}` возвращает `200`, `202` или `404` по согласованному контракту.
+- [x] **API-03**: `GET /api/jobs/{jobId}` возвращает статус конкретной попытки без raw errors.
+- [x] **API-04**: Public API использует единый формат ошибок с `correlationId`.
 
 ### Security
 
@@ -26,24 +26,24 @@
 
 ### Queue and Processing
 
-- [ ] **QUEUE-01**: Задачи хранятся в PostgreSQL-backed queue.
-- [ ] **QUEUE-02**: Worker выбирает задачи конкурентно безопасно.
-- [ ] **QUEUE-03**: Дедупликация использует `capability + content_hash`.
-- [ ] **QUEUE-04**: Retry policy поддерживает max attempts и безопасный final state `blocked`.
+- [x] **QUEUE-01**: Задачи хранятся в PostgreSQL-backed queue.
+- [x] **QUEUE-02**: Worker выбирает задачи конкурентно безопасно.
+- [x] **QUEUE-03**: Дедупликация использует `capability + content_hash`.
+- [x] **QUEUE-04**: Retry policy поддерживает max attempts и безопасный final state `blocked`.
 
 ### PDF Processor
 
-- [ ] **PDF-01**: Фактический JSON-контракт `pdf2txt` зафиксирован discovery-задачей.
-- [ ] **PDF-02**: Adapter вызывает `pdf2txt` через выбранный endpoint из endpoint pool.
-- [ ] **PDF-03**: Endpoint selection MVP использует `least in-flight`.
-- [ ] **PDF-04**: Endpoint и diagnostics сохраняются в истории attempt.
-- [ ] **PDF-05**: `InvalidInputProbe` включается только если discovery подтвердит безопасный validation response.
+- [x] **PDF-01**: Фактический JSON-контракт `pdf2txt` зафиксирован discovery-задачей.
+- [x] **PDF-02**: Adapter вызывает `pdf2txt` через выбранный endpoint из endpoint pool.
+- [x] **PDF-03**: Endpoint selection MVP использует `least in-flight`.
+- [x] **PDF-04**: Endpoint и diagnostics сохраняются в истории attempt.
+- [x] **PDF-05**: `InvalidInputProbe` включается только если discovery подтвердит безопасный validation response.
 
 ### Storage and Results
 
-- [ ] **STORE-01**: Входные PDF хранятся временно и удаляются после terminal state.
-- [ ] **STORE-02**: Result index хранит lightweight ссылку на payload.
-- [ ] **STORE-03**: PDF result payload хранится в result store подсистемы.
+- [x] **STORE-01**: Входные PDF хранятся временно и удаляются после terminal state.
+- [x] **STORE-02**: Result index хранит lightweight ссылку на payload.
+- [x] **STORE-03**: PDF result payload хранится в result store подсистемы.
 - [ ] **STORE-04**: Temporary storage hard limit блокирует новые upload-ы с `503 temporary_storage_full`.
 
 ### Admin and Operations
@@ -51,8 +51,8 @@
 - [ ] **ADMIN-01**: Admin UI показывает минимальную видимость очереди, failed/blocked jobs и processor health.
 - [ ] **ADMIN-02**: Admin может выполнить manual retry одной failed/blocked задачи.
 - [ ] **ADMIN-03**: Audit фиксирует опасные admin actions.
-- [ ] **HEALTH-01**: Web предоставляет `/health/live` и `/health/ready`.
-- [ ] **HEALTH-02**: Worker пишет heartbeat каждые `30 seconds`, stale threshold `3 minutes`.
+- [x] **HEALTH-01**: Web предоставляет `/health/live` и `/health/ready`.
+- [x] **HEALTH-02**: Worker пишет heartbeat каждые `30 seconds`, stale threshold `3 minutes`.
 
 ### Delivery
 
@@ -82,34 +82,34 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ARCH-01 | Phase 1 | Pending |
-| ARCH-02 | Phase 1 | Pending |
-| ARCH-03 | Phase 1 | Pending |
-| API-01 | Phase 1 | Pending |
-| API-02 | Phase 1 | Pending |
-| API-03 | Phase 1 | Pending |
-| API-04 | Phase 1 | Pending |
+| ARCH-01 | Phase 1 | Done |
+| ARCH-02 | Phase 1 | Done |
+| ARCH-03 | Phase 1 | Done |
+| API-01 | Phase 1 | Done |
+| API-02 | Phase 1 | Done |
+| API-03 | Phase 1 | Done |
+| API-04 | Phase 1 | Done |
 | SEC-01 | Phase 2 | Pending |
 | SEC-02 | Phase 2 | Pending |
 | SEC-03 | Phase 2 | Pending |
-| QUEUE-01 | Phase 1 | Pending |
-| QUEUE-02 | Phase 1 | Pending |
-| QUEUE-03 | Phase 1 | Pending |
-| QUEUE-04 | Phase 1 | Pending |
-| PDF-01 | Phase 1 | Pending |
-| PDF-02 | Phase 1 | Pending |
-| PDF-03 | Phase 1 | Pending |
-| PDF-04 | Phase 1 | Pending |
-| PDF-05 | Phase 1 | Pending |
-| STORE-01 | Phase 1 | Pending |
-| STORE-02 | Phase 1 | Pending |
-| STORE-03 | Phase 1 | Pending |
+| QUEUE-01 | Phase 1 | Done |
+| QUEUE-02 | Phase 1 | Done |
+| QUEUE-03 | Phase 1 | Done |
+| QUEUE-04 | Phase 1 | Done |
+| PDF-01 | Phase 1 | Done |
+| PDF-02 | Phase 1 | Done |
+| PDF-03 | Phase 1 | Done |
+| PDF-04 | Phase 1 | Done |
+| PDF-05 | Phase 1 | Done |
+| STORE-01 | Phase 1 | Done |
+| STORE-02 | Phase 1 | Done |
+| STORE-03 | Phase 1 | Done |
 | STORE-04 | Phase 2 | Pending |
-| ADMIN-01 | Phase 1 | Pending |
+| ADMIN-01 | Phase 1 | Partial: Admin API done, UI pending |
 | ADMIN-02 | Phase 2 | Pending |
 | ADMIN-03 | Phase 2 | Pending |
-| HEALTH-01 | Phase 2 | Pending |
-| HEALTH-02 | Phase 2 | Pending |
+| HEALTH-01 | Phase 2 | Done |
+| HEALTH-02 | Phase 2 | Done |
 | DEPLOY-01 | Phase 3 | Pending |
 | DEPLOY-02 | Phase 3 | Pending |
 
@@ -120,4 +120,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-05-31 after GSD initialization*
+*Last updated: 2026-06-01 after Phase 1 backend checkpoint*
