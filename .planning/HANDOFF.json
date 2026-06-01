@@ -1,14 +1,14 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-01T16:45:29+03:00",
+  "timestamp": "2026-06-01T17:05:00+03:00",
   "context": "phase",
   "phase": "2",
   "phase_name": "Security, Retry, Health, Admin Actions",
   "phase_dir": ".planning/phases/001-walking-skeleton-pdf-processing",
   "status": "paused_for_context_cleanup",
   "last_commit": {
-    "hash": "516d691",
-    "subject": "Add temporary storage hard limit guard"
+    "hash": "8cb26a0",
+    "subject": "Add admin job support report"
   },
   "completed_checkpoints": [
     {
@@ -30,10 +30,13 @@
     {
       "name": "Temporary storage hard limit guard",
       "commit": "516d691"
+    },
+    {
+      "name": "Admin Job Details support report MVP",
+      "commit": "8cb26a0"
     }
   ],
   "remaining_work": [
-    "Support report MVP for Job Details",
     "Broader audit coverage and read API for Admin UI",
     "Docker Compose delivery MVP",
     "First admin init command",
@@ -41,8 +44,8 @@
   ],
   "verification": {
     "build": "passed with known MSB3101 obj cache warnings",
-    "tests": "unit 40/40, integration 22/22",
-    "smoke": "passed with fake-pdf2txt",
+    "tests": "unit 40/40, integration 24/24",
+    "smoke": "passed with fake-pdf2txt after escalation; sandbox run failed readiness because temporary file deletion in .codex-local was denied",
     "dotnet_processes_after_smoke": "none"
   },
   "critical_rules": [
@@ -51,7 +54,7 @@
     "No Entity Framework",
     "Use explicit SQL/Npgsql",
     "Admin state-changing endpoints require session cookie and X-CSRF-Token",
-    "Do not include raw secrets, input PDF files, or large payloads in diagnostics/audit/support report"
+    "Do not include raw secrets, input PDF files, temporaryFileKey, or large payloads in diagnostics/audit/support report"
   ],
-  "next_action": "Implement Support Report MVP for Admin Job Details, or ask user to choose between support report and audit read API."
+  "next_action": "Implement broader audit/read API for Admin UI, or move to Docker Compose delivery MVP if audit read API is deferred to Admin UI completion."
 }
