@@ -200,6 +200,48 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task Admin_api_requires_session_cookie()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/api/admin/jobs");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("unauthorized", payload.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Admin_login_sets_session_cookie_and_logout_requires_csrf()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var admin = await CreateAdminClientAsync(_factory);
+        var me = await admin.Client.GetAsync("/api/admin/auth/me");
+        var logoutWithoutCsrf = await admin.Client.PostAsync("/api/admin/auth/logout", null);
+
+        using var logoutRequest = new HttpRequestMessage(HttpMethod.Post, "/api/admin/auth/logout");
+        logoutRequest.Headers.Add("X-CSRF-Token", admin.CsrfToken);
+        var logout = await admin.Client.SendAsync(logoutRequest);
+        var afterLogout = await admin.Client.GetAsync("/api/admin/auth/me");
+
+        Assert.Equal(HttpStatusCode.OK, me.StatusCode);
+        var mePayload = await me.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(admin.Login, mePayload.GetProperty("admin").GetProperty("login").GetString());
+
+        Assert.Equal(HttpStatusCode.Forbidden, logoutWithoutCsrf.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, logout.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, afterLogout.StatusCode);
+    }
+
+    [Fact]
     public async Task Admin_jobs_api_lists_and_returns_job_details()
     {
         if (!HasConfiguredTestDatabase())
@@ -208,6 +250,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         }
 
         var client = await CreateAuthorizedClientAsync(_factory);
+        var admin = await CreateAdminClientAsync(_factory);
         using var content = new MultipartFormDataContent();
         using var file = new ByteArrayContent(Encoding.UTF8.GetBytes($"%PDF-1.7 admin job {Guid.NewGuid():N}"));
         content.Add(file, "file", "admin.pdf");
@@ -217,8 +260,8 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         var hash = createdPayload.GetProperty("hash").GetString();
         var jobId = createdPayload.GetProperty("jobId").GetString();
 
-        var list = await client.GetAsync($"/api/admin/jobs?hash={Uri.EscapeDataString(hash!)}");
-        var details = await client.GetAsync($"/api/admin/jobs/{jobId}");
+        var list = await admin.Client.GetAsync($"/api/admin/jobs?hash={Uri.EscapeDataString(hash!)}");
+        var details = await admin.Client.GetAsync($"/api/admin/jobs/{jobId}");
 
         Assert.Equal(HttpStatusCode.Accepted, created.StatusCode);
         Assert.True(
@@ -254,12 +297,13 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         }
 
         var client = await CreateAuthorizedClientAsync(_factory);
+        var admin = await CreateAdminClientAsync(_factory);
         using var content = new MultipartFormDataContent();
         using var file = new ByteArrayContent(Encoding.UTF8.GetBytes($"%PDF-1.7 processor status {Guid.NewGuid():N}"));
         content.Add(file, "file", "processor-status.pdf");
 
         var created = await client.PostAsync("/api/pdf-stamp-recognition/jobs", content);
-        var status = await client.GetAsync("/api/admin/processors/pdf2txt-http-recognizer");
+        var status = await admin.Client.GetAsync("/api/admin/processors/pdf2txt-http-recognizer");
 
         Assert.Equal(HttpStatusCode.Accepted, created.StatusCode);
         Assert.Equal(HttpStatusCode.OK, status.StatusCode);
@@ -305,6 +349,37 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         return client;
     }
 
+    private static async Task<AdminTestSession> CreateAdminClientAsync(WebApplicationFactory<Program> factory)
+    {
+        var login = $"admin_{Guid.NewGuid():N}";
+        var password = $"Admin_password_{Guid.NewGuid():N}";
+        await SeedAdminUserAsync(login, password);
+
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        var response = await client.PostAsJsonAsync(
+            "/api/admin/auth/login",
+            new
+            {
+                Login = login,
+                Password = password
+            });
+        Assert.True(
+            response.StatusCode == HttpStatusCode.OK,
+            $"Expected admin login to return OK, got {response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+        Assert.True(response.Headers.TryGetValues("Set-Cookie", out var setCookieValues));
+        Assert.Contains(setCookieValues, value => value.Contains("centerales_admin_session=", StringComparison.Ordinal));
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var csrfToken = payload.GetProperty("csrfToken").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(csrfToken));
+
+        return new AdminTestSession(client, login, csrfToken!);
+    }
+
     private static async Task SeedApiKeyAsync(
         string keyId,
         string secret,
@@ -344,4 +419,42 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         await command.ExecuteNonQueryAsync(CancellationToken.None);
     }
+
+    private static async Task SeedAdminUserAsync(string login, string password)
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString()
+            ?? throw new InvalidOperationException("Test database is not configured.");
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await using var connection = await dataSource.OpenConnectionAsync(CancellationToken.None);
+        await using var command = new NpgsqlCommand("""
+            insert into admin_users (
+                id,
+                login,
+                password_hash,
+                is_active,
+                role,
+                created_at,
+                updated_at)
+            values (
+                @id,
+                @login,
+                @password_hash,
+                true,
+                'admin',
+                @created_at,
+                @created_at);
+            """, connection);
+        command.Parameters.AddWithValue("id", Guid.NewGuid());
+        command.Parameters.AddWithValue("login", login);
+        command.Parameters.AddWithValue("password_hash", AdminPasswordHasher.HashPassword(password));
+        command.Parameters.AddWithValue("created_at", DateTimeOffset.UtcNow);
+
+        await command.ExecuteNonQueryAsync(CancellationToken.None);
+    }
+
+    private sealed record AdminTestSession(HttpClient Client, string Login, string CsrfToken);
 }

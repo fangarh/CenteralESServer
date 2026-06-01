@@ -95,6 +95,39 @@ public static class PostgresProcessingSql
             last_used_user_agent text null,
             disabled_at timestamptz null
         );
+
+        create table if not exists admin_users (
+            id uuid primary key,
+            login text not null,
+            password_hash text not null,
+            is_active boolean not null,
+            role text not null,
+            created_at timestamptz not null,
+            updated_at timestamptz not null,
+            last_login_at timestamptz null,
+            disabled_at timestamptz null
+        );
+
+        create unique index if not exists ux_admin_users_login_lower
+            on admin_users (lower(login));
+
+        create table if not exists admin_sessions (
+            id uuid primary key,
+            admin_user_id uuid not null references admin_users(id),
+            session_token_hash text not null unique,
+            csrf_token_hash text not null,
+            created_at timestamptz not null,
+            last_seen_at timestamptz not null,
+            expires_at timestamptz not null,
+            idle_expires_at timestamptz not null,
+            revoked_at timestamptz null,
+            created_ip text null,
+            created_user_agent text null
+        );
+
+        create index if not exists ix_admin_sessions_active
+            on admin_sessions (admin_user_id, expires_at, idle_expires_at)
+            where revoked_at is null;
         """;
 
     public const string ClaimNext = """

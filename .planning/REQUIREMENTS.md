@@ -23,6 +23,7 @@
 - [x] **SEC-01**: Public API принимает `Authorization: ApiKey <keyId>.<secret>`.
 - [x] **SEC-02**: Сервер хранит только hash API key secret.
 - [x] **SEC-03**: API key может быть отключён и ограничен allowed capabilities.
+- [x] **SEC-04**: Admin API требует session cookie, а state-changing endpoint-ы требуют CSRF token.
 
 ### Queue and Processing
 
@@ -92,6 +93,7 @@
 | SEC-01 | Phase 2 | Done |
 | SEC-02 | Phase 2 | Done |
 | SEC-03 | Phase 2 | Done |
+| SEC-04 | Phase 2 | Done |
 | QUEUE-01 | Phase 1 | Done |
 | QUEUE-02 | Phase 1 | Done |
 | QUEUE-03 | Phase 1 | Done |
@@ -114,10 +116,10 @@
 | DEPLOY-02 | Phase 3 | Pending |
 
 **Coverage:**
-- v1 requirements: 30 total
-- Mapped to phases: 30
+- v1 requirements: 31 total
+- Mapped to phases: 31
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-01 after Public API key auth checkpoint*
+*Last updated: 2026-06-01 after admin session auth checkpoint*

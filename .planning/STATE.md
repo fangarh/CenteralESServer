@@ -36,7 +36,7 @@ Phase 2: Security, Retry, Health, Admin Actions
 Plan:
 
 ```text
-Start with API key model and Public API auth middleware.
+Continue Phase 2 with manual retry and audit after API key auth and admin session auth baselines.
 ```
 
 ## Current Open External Facts
@@ -81,6 +81,7 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - 2026-06-01: Web `/health/ready` now also verifies minimal processing schema compatibility by checking required processing/result/worker heartbeat tables; local smoke passed with the schema check enabled.
 - 2026-06-01: Phase 1 backend checkpoint recorded in requirements/roadmap; next implementation focus is Phase 2 API key auth for Public API.
 - 2026-06-01: Public API key auth baseline added: `client_applications` table, PBKDF2 secret hashes, PostgreSQL authenticator, `Authorization: ApiKey <keyId>.<secret>` enforcement on Public API endpoints, 401/403 contract tests, and local smoke with seeded API key.
+- 2026-06-01: Admin login/session/CSRF backend baseline added: `admin_users` and `admin_sessions` tables, PBKDF2 admin password hashes, hashed session/CSRF tokens, `POST /api/admin/auth/login`, `GET /api/admin/auth/me`, `POST /api/admin/auth/logout`, session protection for read-only Admin API, and CSRF enforcement for logout.
 
 ## Workflow Rules
 
@@ -90,4 +91,4 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-06-01 after Public API key auth checkpoint*
+*Last updated: 2026-06-01 after admin session auth checkpoint*

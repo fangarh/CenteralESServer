@@ -31,4 +31,14 @@ public sealed class PostgresProcessingSqlTests
         Assert.Contains("secret_hash text not null", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("allowed_capabilities text[] not null", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Schema_contains_admin_users_and_sessions_for_cookie_auth()
+    {
+        Assert.Contains("create table if not exists admin_users", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("password_hash text not null", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("create table if not exists admin_sessions", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("session_token_hash text not null unique", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("csrf_token_hash text not null", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+    }
 }

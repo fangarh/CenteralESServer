@@ -24,6 +24,7 @@ await databaseBootstrapper.EnsureDatabaseAsync(processingDatabaseConnectionStrin
 
 builder.Services.AddSingleton(NpgsqlDataSource.Create(processingDatabaseConnectionString));
 builder.Services.AddSingleton<IApiKeyAuthenticator, PostgresApiKeyAuthenticator>();
+builder.Services.AddSingleton<IAdminAuthenticator, PostgresAdminAuthenticator>();
 builder.Services.AddSingleton<IProcessingJobQueue, PostgresProcessingJobQueue>();
 builder.Services.AddSingleton<IPdfStampRecognitionResultStore, PostgresPdfStampRecognitionResultStore>();
 builder.Services.AddSingleton<ITemporaryFileStore>(_ => new LocalTemporaryFileStore(temporaryStorageRoot));
@@ -197,14 +198,102 @@ app.MapGet("/api/jobs/{jobId}", async (
 })
     .WithName("GetJob");
 
+app.MapPost("/api/admin/auth/login", async (
+    AdminLoginRequestBody login,
+    HttpRequest request,
+    HttpResponse response,
+    IAdminAuthenticator adminAuthenticator,
+    CancellationToken cancellationToken) =>
+{
+    var outcome = await adminAuthenticator.LoginAsync(
+        new AdminLoginRequest(
+            login.Login ?? string.Empty,
+            login.Password ?? string.Empty,
+            DateTimeOffset.UtcNow,
+            request.HttpContext.Connection.RemoteIpAddress?.ToString(),
+            request.Headers.UserAgent.ToString()),
+        cancellationToken);
+
+    if (outcome.Status is not AdminLoginStatus.Success
+        || outcome.Principal is null
+        || outcome.Credential is null)
+    {
+        return Results.Json(
+            ApiErrorResponse.Create("unauthorized", "Admin credentials are missing or invalid."),
+            statusCode: StatusCodes.Status401Unauthorized);
+    }
+
+    AppendAdminSessionCookie(response, outcome.Credential.SessionToken, request.IsHttps);
+    return Results.Ok(new AdminLoginResponse(
+        ToAdminUserResponse(outcome.Principal),
+        outcome.Credential.CsrfToken,
+        outcome.Credential.ExpiresAt,
+        outcome.Credential.IdleExpiresAt));
+})
+    .WithName("AdminLogin");
+
+app.MapGet("/api/admin/auth/me", async (
+    HttpRequest request,
+    IAdminAuthenticator adminAuthenticator,
+    CancellationToken cancellationToken) =>
+{
+    var authorization = await AuthorizeAdminApiAsync(
+        request,
+        adminAuthenticator,
+        requireCsrf: false,
+        cancellationToken);
+    if (authorization.Error is not null)
+    {
+        return authorization.Error;
+    }
+
+    return Results.Ok(new AdminMeResponse(ToAdminUserResponse(authorization.Principal!)));
+})
+    .WithName("AdminMe");
+
+app.MapPost("/api/admin/auth/logout", async (
+    HttpRequest request,
+    HttpResponse response,
+    IAdminAuthenticator adminAuthenticator,
+    CancellationToken cancellationToken) =>
+{
+    var authorization = await AuthorizeAdminApiAsync(
+        request,
+        adminAuthenticator,
+        requireCsrf: true,
+        cancellationToken);
+    if (authorization.Error is not null)
+    {
+        return authorization.Error;
+    }
+
+    var sessionToken = TryReadAdminSessionToken(request);
+    await adminAuthenticator.LogoutAsync(sessionToken, DateTimeOffset.UtcNow, cancellationToken);
+    DeleteAdminSessionCookie(response, request.IsHttps);
+    return Results.Ok(new AdminLogoutResponse(true));
+})
+    .WithName("AdminLogout");
+
 app.MapGet("/api/admin/jobs", async (
     string? capability,
     string? status,
     string? hash,
     int? limit,
+    HttpRequest request,
+    IAdminAuthenticator adminAuthenticator,
     IAdminProcessingReadStore readStore,
     CancellationToken cancellationToken) =>
 {
+    var authorization = await AuthorizeAdminApiAsync(
+        request,
+        adminAuthenticator,
+        requireCsrf: false,
+        cancellationToken);
+    if (authorization.Error is not null)
+    {
+        return authorization.Error;
+    }
+
     if (!TryParseOptionalStatus(status, out var parsedStatus))
     {
         return Results.BadRequest(ApiErrorResponse.Create("invalid_input", $"Job status '{status}' is not valid."));
@@ -224,9 +313,21 @@ app.MapGet("/api/admin/jobs", async (
 
 app.MapGet("/api/admin/jobs/{jobId}", async (
     string jobId,
+    HttpRequest request,
+    IAdminAuthenticator adminAuthenticator,
     IAdminProcessingReadStore readStore,
     CancellationToken cancellationToken) =>
 {
+    var authorization = await AuthorizeAdminApiAsync(
+        request,
+        adminAuthenticator,
+        requireCsrf: false,
+        cancellationToken);
+    if (authorization.Error is not null)
+    {
+        return authorization.Error;
+    }
+
     if (!Guid.TryParse(jobId, out var parsedJobId))
     {
         return Results.BadRequest(ApiErrorResponse.Create("invalid_input", $"Job id '{jobId}' is not a valid GUID."));
@@ -241,9 +342,21 @@ app.MapGet("/api/admin/jobs/{jobId}", async (
 
 app.MapGet("/api/admin/processors/{processorKey}", async (
     string processorKey,
+    HttpRequest request,
+    IAdminAuthenticator adminAuthenticator,
     IAdminProcessingReadStore readStore,
     CancellationToken cancellationToken) =>
 {
+    var authorization = await AuthorizeAdminApiAsync(
+        request,
+        adminAuthenticator,
+        requireCsrf: false,
+        cancellationToken);
+    if (authorization.Error is not null)
+    {
+        return authorization.Error;
+    }
+
     if (!string.Equals(processorKey, PdfStampRecognitionConstants.ProcessorKey, StringComparison.Ordinal))
     {
         return Results.NotFound(ApiErrorResponse.Create("processor_not_found", $"Processor '{processorKey}' was not found."));
@@ -357,7 +470,9 @@ static async Task<HealthCheckItemResponse> CheckProcessingSchemaAsync(
                 and to_regclass('public.processing_result_index') is not null
                 and to_regclass('public.pdf_stamp_recognition_results') is not null
                 and to_regclass('public.processing_worker_heartbeats') is not null
-                and to_regclass('public.client_applications') is not null;
+                and to_regclass('public.client_applications') is not null
+                and to_regclass('public.admin_users') is not null
+                and to_regclass('public.admin_sessions') is not null;
             """, connection);
         var compatible = await command.ExecuteScalarAsync(cancellationToken);
         return new HealthCheckItemResponse(
@@ -451,6 +566,71 @@ static ApiKeyCredential? TryParseApiKeyCredential(string authorization)
     return string.IsNullOrWhiteSpace(keyId) || string.IsNullOrWhiteSpace(secret)
         ? null
         : new ApiKeyCredential(keyId, secret);
+}
+
+static async Task<AdminAuthorizationResult> AuthorizeAdminApiAsync(
+    HttpRequest request,
+    IAdminAuthenticator adminAuthenticator,
+    bool requireCsrf,
+    CancellationToken cancellationToken)
+{
+    var outcome = await adminAuthenticator.ValidateSessionAsync(
+        new AdminSessionValidationRequest(
+            TryReadAdminSessionToken(request),
+            request.Headers["X-CSRF-Token"].ToString(),
+            requireCsrf,
+            DateTimeOffset.UtcNow),
+        cancellationToken);
+
+    return outcome.Status switch
+    {
+        AdminSessionValidationStatus.Success => new AdminAuthorizationResult(null, outcome.Principal),
+        AdminSessionValidationStatus.Forbidden => new AdminAuthorizationResult(
+            Results.Json(
+                ApiErrorResponse.Create("forbidden", "CSRF token is missing or invalid."),
+                statusCode: StatusCodes.Status403Forbidden),
+            null),
+        _ => new AdminAuthorizationResult(
+            Results.Json(
+                ApiErrorResponse.Create("unauthorized", "Admin session is missing or invalid."),
+                statusCode: StatusCodes.Status401Unauthorized),
+            null)
+    };
+}
+
+static string? TryReadAdminSessionToken(HttpRequest request)
+{
+    return request.Cookies.TryGetValue("centerales_admin_session", out var value)
+        ? value
+        : null;
+}
+
+static void AppendAdminSessionCookie(HttpResponse response, string sessionToken, bool secure)
+{
+    response.Cookies.Append(
+        "centerales_admin_session",
+        sessionToken,
+        new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = secure,
+            SameSite = SameSiteMode.Strict,
+            Path = "/api/admin",
+            MaxAge = TimeSpan.FromHours(24)
+        });
+}
+
+static void DeleteAdminSessionCookie(HttpResponse response, bool secure)
+{
+    response.Cookies.Delete(
+        "centerales_admin_session",
+        new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = secure,
+            SameSite = SameSiteMode.Strict,
+            Path = "/api/admin"
+        });
 }
 
 static string ToPublicStatus(CenteralES.Processing.ProcessingJobStatus status)
@@ -619,6 +799,14 @@ static AdminProcessorRecentDiagnosticResponse ToAdminProcessorRecentDiagnosticRe
         diagnostic.CreatedAt);
 }
 
+static AdminUserResponse ToAdminUserResponse(AdminPrincipal principal)
+{
+    return new AdminUserResponse(
+        principal.UserId.ToString("N"),
+        principal.Login,
+        principal.Role);
+}
+
 internal sealed record HealthResponse(string Status, DateTimeOffset CheckedAt);
 
 internal sealed record ReadyHealthResponse(
@@ -655,6 +843,25 @@ internal sealed record ApiErrorResponse(ApiError Error)
 internal sealed record ApiError(string Code, string Message, object? Details, string CorrelationId);
 
 internal readonly record struct ApiKeyCredential(string KeyId, string Secret);
+
+internal sealed record AdminLoginRequestBody(string? Login, string? Password);
+
+internal sealed record AdminLoginResponse(
+    AdminUserResponse Admin,
+    string CsrfToken,
+    DateTimeOffset ExpiresAt,
+    DateTimeOffset IdleExpiresAt);
+
+internal sealed record AdminMeResponse(AdminUserResponse Admin);
+
+internal sealed record AdminLogoutResponse(bool LoggedOut);
+
+internal sealed record AdminUserResponse(
+    string UserId,
+    string Login,
+    string Role);
+
+internal sealed record AdminAuthorizationResult(IResult? Error, AdminPrincipal? Principal);
 
 internal sealed record AdminJobListResponse(IReadOnlyList<AdminJobListItemResponse> Jobs);
 

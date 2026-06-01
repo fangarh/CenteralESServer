@@ -34,12 +34,12 @@ Scope:
 
 ### Phase 2: Security, Retry, Health, Admin Actions
 
-**Status:** Next
+**Status:** In Progress
 
 Scope:
 
 - API key model and auth middleware; baseline implemented, admin creation/rotation UI remains later in Phase 2/4;
-- admin login/session/CSRF baseline;
+- admin login/session/CSRF baseline; backend baseline implemented, init command/UI/audit remain later in Phase 2/4;
 - manual retry одной задачи;
 - audit для admin actions;
 - health live/ready и Worker heartbeat; baseline already implemented in Phase 1, remaining work is hardening/admin visibility;
@@ -94,4 +94,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-01 after Phase 1 backend checkpoint*
+*Last updated: 2026-06-01 after admin session auth checkpoint*
