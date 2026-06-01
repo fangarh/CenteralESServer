@@ -23,4 +23,12 @@ public sealed class PostgresProcessingSqlTests
         Assert.Contains("create table if not exists processing_worker_heartbeats", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ix_processing_worker_heartbeats_processor", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Schema_contains_client_applications_for_api_key_auth()
+    {
+        Assert.Contains("create table if not exists client_applications", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("secret_hash text not null", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("allowed_capabilities text[] not null", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -1,8 +1,13 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using CenteralES.AccessControl;
+using CenteralES.Infrastructure.Postgres;
+using CenteralES.PdfStampRecognition;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Npgsql;
 
 namespace CenteralES.IntegrationTests;
 
@@ -63,10 +68,46 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
             return;
         }
 
-        var client = _factory.CreateClient();
+        var client = await CreateAuthorizedClientAsync(_factory);
         var response = await client.GetAsync("/api/pdf-stamp-recognition/results/sha256:missing");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Public_api_returns_401_when_api_key_is_missing()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/api/pdf-stamp-recognition/results/sha256:missing");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("unauthorized", payload.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Public_api_returns_403_when_api_key_lacks_capability()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = await CreateAuthorizedClientAsync(_factory, "other-capability");
+        using var content = new MultipartFormDataContent();
+        using var file = new ByteArrayContent(Encoding.UTF8.GetBytes($"%PDF-1.7 forbidden {Guid.NewGuid():N}"));
+        content.Add(file, "file", "forbidden.pdf");
+
+        var response = await client.PostAsync("/api/pdf-stamp-recognition/jobs", content);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal("forbidden", payload.GetProperty("error").GetProperty("code").GetString());
     }
 
     [Fact]
@@ -77,7 +118,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
             return;
         }
 
-        var client = _factory.CreateClient();
+        var client = await CreateAuthorizedClientAsync(_factory);
         using var content = new MultipartFormDataContent();
         using var file = new ByteArrayContent(Encoding.UTF8.GetBytes($"%PDF-1.7 fake test pdf {Guid.NewGuid():N}"));
         content.Add(file, "file", "test.pdf");
@@ -105,7 +146,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         try
         {
             using var factory = new WebApplicationFactory<Program>();
-            var client = factory.CreateClient();
+            var client = await CreateAuthorizedClientAsync(factory);
             using var content = new MultipartFormDataContent();
             using var file = new ByteArrayContent(Encoding.UTF8.GetBytes("%PDF-1.7 larger than ten bytes"));
             content.Add(file, "file", "large.pdf");
@@ -130,7 +171,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
             return;
         }
 
-        var client = _factory.CreateClient();
+        var client = await CreateAuthorizedClientAsync(_factory);
         using var content = new MultipartFormDataContent();
         using var file = new ByteArrayContent(Encoding.UTF8.GetBytes($"%PDF-1.7 active job {Guid.NewGuid():N}"));
         content.Add(file, "file", "active.pdf");
@@ -166,7 +207,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
             return;
         }
 
-        var client = _factory.CreateClient();
+        var client = await CreateAuthorizedClientAsync(_factory);
         using var content = new MultipartFormDataContent();
         using var file = new ByteArrayContent(Encoding.UTF8.GetBytes($"%PDF-1.7 admin job {Guid.NewGuid():N}"));
         content.Add(file, "file", "admin.pdf");
@@ -212,7 +253,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
             return;
         }
 
-        var client = _factory.CreateClient();
+        var client = await CreateAuthorizedClientAsync(_factory);
         using var content = new MultipartFormDataContent();
         using var file = new ByteArrayContent(Encoding.UTF8.GetBytes($"%PDF-1.7 processor status {Guid.NewGuid():N}"));
         content.Add(file, "file", "processor-status.pdf");
@@ -244,5 +285,63 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         Environment.SetEnvironmentVariable("CENTERALES_PROCESSING_DATABASE", connectionString);
         return true;
+    }
+
+    private static async Task<HttpClient> CreateAuthorizedClientAsync(
+        WebApplicationFactory<Program> factory,
+        params string[] allowedCapabilities)
+    {
+        var keyId = $"it_{Guid.NewGuid():N}";
+        var secret = $"secret_{Guid.NewGuid():N}";
+        await SeedApiKeyAsync(
+            keyId,
+            secret,
+            allowedCapabilities.Length == 0
+                ? new[] { PdfStampRecognitionConstants.Capability }
+                : allowedCapabilities);
+
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("ApiKey", $"{keyId}.{secret}");
+        return client;
+    }
+
+    private static async Task SeedApiKeyAsync(
+        string keyId,
+        string secret,
+        IReadOnlyList<string> allowedCapabilities)
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString()
+            ?? throw new InvalidOperationException("Test database is not configured.");
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await using var connection = await dataSource.OpenConnectionAsync(CancellationToken.None);
+        await using var command = new NpgsqlCommand("""
+            insert into client_applications (
+                key_id,
+                name,
+                secret_hash,
+                is_active,
+                allowed_capabilities,
+                created_at,
+                updated_at)
+            values (
+                @key_id,
+                @name,
+                @secret_hash,
+                true,
+                @allowed_capabilities,
+                @created_at,
+                @created_at);
+            """, connection);
+        command.Parameters.AddWithValue("key_id", keyId);
+        command.Parameters.AddWithValue("name", $"Integration key {keyId}");
+        command.Parameters.AddWithValue("secret_hash", ApiKeySecretHasher.HashSecret(secret));
+        command.Parameters.AddWithValue("allowed_capabilities", allowedCapabilities.ToArray());
+        command.Parameters.AddWithValue("created_at", DateTimeOffset.UtcNow);
+
+        await command.ExecuteNonQueryAsync(CancellationToken.None);
     }
 }

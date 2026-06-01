@@ -1,4 +1,6 @@
+using CenteralES.AccessControl;
 using CenteralES.Admin;
+using CenteralES.Infrastructure.AccessControl;
 using CenteralES.Infrastructure.Postgres;
 using CenteralES.Infrastructure.PdfStampRecognition;
 using CenteralES.Infrastructure.Processing;
@@ -21,6 +23,7 @@ var databaseBootstrapper = new PostgresDatabaseBootstrapper();
 await databaseBootstrapper.EnsureDatabaseAsync(processingDatabaseConnectionString, CancellationToken.None);
 
 builder.Services.AddSingleton(NpgsqlDataSource.Create(processingDatabaseConnectionString));
+builder.Services.AddSingleton<IApiKeyAuthenticator, PostgresApiKeyAuthenticator>();
 builder.Services.AddSingleton<IProcessingJobQueue, PostgresProcessingJobQueue>();
 builder.Services.AddSingleton<IPdfStampRecognitionResultStore, PostgresPdfStampRecognitionResultStore>();
 builder.Services.AddSingleton<ITemporaryFileStore>(_ => new LocalTemporaryFileStore(temporaryStorageRoot));
@@ -67,11 +70,22 @@ app.MapGet("/health/ready", async (
 
 app.MapPost("/api/pdf-stamp-recognition/jobs", async (
     HttpRequest request,
+    IApiKeyAuthenticator apiKeyAuthenticator,
     IProcessingJobQueue queue,
     IPdfStampRecognitionResultStore resultStore,
     ITemporaryFileStore temporaryFileStore,
     CancellationToken cancellationToken) =>
 {
+    var authorization = await AuthorizePublicApiAsync(
+        request,
+        apiKeyAuthenticator,
+        PdfStampRecognitionConstants.Capability,
+        cancellationToken);
+    if (authorization is not null)
+    {
+        return authorization;
+    }
+
     if (!request.HasFormContentType)
     {
         return Results.BadRequest(ApiErrorResponse.Create("invalid_input", "PDF file must be sent as multipart form data."));
@@ -125,10 +139,22 @@ app.MapPost("/api/pdf-stamp-recognition/jobs", async (
 
 app.MapGet("/api/pdf-stamp-recognition/results/{hash}", async (
     string hash,
+    HttpRequest request,
+    IApiKeyAuthenticator apiKeyAuthenticator,
     IProcessingJobQueue queue,
     IPdfStampRecognitionResultStore resultStore,
     CancellationToken cancellationToken) =>
 {
+    var authorization = await AuthorizePublicApiAsync(
+        request,
+        apiKeyAuthenticator,
+        PdfStampRecognitionConstants.Capability,
+        cancellationToken);
+    if (authorization is not null)
+    {
+        return authorization;
+    }
+
     var result = await resultStore.GetByHashAsync(hash, cancellationToken);
     if (result is not null)
     {
@@ -144,9 +170,21 @@ app.MapGet("/api/pdf-stamp-recognition/results/{hash}", async (
 
 app.MapGet("/api/jobs/{jobId}", async (
     string jobId,
+    HttpRequest request,
+    IApiKeyAuthenticator apiKeyAuthenticator,
     IProcessingJobQueue queue,
     CancellationToken cancellationToken) =>
 {
+    var authorization = await AuthorizePublicApiAsync(
+        request,
+        apiKeyAuthenticator,
+        PdfStampRecognitionConstants.Capability,
+        cancellationToken);
+    if (authorization is not null)
+    {
+        return authorization;
+    }
+
     if (!Guid.TryParse(jobId, out var parsedJobId))
     {
         return Results.BadRequest(ApiErrorResponse.Create("invalid_input", $"Job id '{jobId}' is not a valid GUID."));
@@ -318,7 +356,8 @@ static async Task<HealthCheckItemResponse> CheckProcessingSchemaAsync(
                 and to_regclass('public.processing_attempt_diagnostics') is not null
                 and to_regclass('public.processing_result_index') is not null
                 and to_regclass('public.pdf_stamp_recognition_results') is not null
-                and to_regclass('public.processing_worker_heartbeats') is not null;
+                and to_regclass('public.processing_worker_heartbeats') is not null
+                and to_regclass('public.client_applications') is not null;
             """, connection);
         var compatible = await command.ExecuteScalarAsync(cancellationToken);
         return new HealthCheckItemResponse(
@@ -353,6 +392,65 @@ static async Task<HealthCheckItemResponse> CheckTemporaryStorageAsync(
     {
         return new HealthCheckItemResponse("temporaryStorage", "unhealthy");
     }
+}
+
+static async Task<IResult?> AuthorizePublicApiAsync(
+    HttpRequest request,
+    IApiKeyAuthenticator authenticator,
+    string requiredCapability,
+    CancellationToken cancellationToken)
+{
+    var credential = TryParseApiKeyCredential(request.Headers.Authorization.ToString());
+    if (credential is null)
+    {
+        return Results.Json(
+            ApiErrorResponse.Create("unauthorized", "API key is missing or invalid."),
+            statusCode: StatusCodes.Status401Unauthorized);
+    }
+
+    var outcome = await authenticator.AuthenticateAsync(
+        new ApiKeyAuthenticationRequest(
+            credential.Value.KeyId,
+            credential.Value.Secret,
+            requiredCapability,
+            DateTimeOffset.UtcNow,
+            request.HttpContext.Connection.RemoteIpAddress?.ToString(),
+            request.Headers.UserAgent.ToString()),
+        cancellationToken);
+
+    return outcome.Status switch
+    {
+        ApiKeyAuthenticationStatus.Success => null,
+        ApiKeyAuthenticationStatus.Forbidden => Results.Json(
+            ApiErrorResponse.Create("forbidden", "API key is not allowed to use the requested capability."),
+            statusCode: StatusCodes.Status403Forbidden),
+        _ => Results.Json(
+            ApiErrorResponse.Create("unauthorized", "API key is missing or invalid."),
+            statusCode: StatusCodes.Status401Unauthorized)
+    };
+}
+
+static ApiKeyCredential? TryParseApiKeyCredential(string authorization)
+{
+    const string scheme = "ApiKey ";
+    if (string.IsNullOrWhiteSpace(authorization)
+        || !authorization.StartsWith(scheme, StringComparison.Ordinal))
+    {
+        return null;
+    }
+
+    var value = authorization[scheme.Length..].Trim();
+    var separator = value.IndexOf('.', StringComparison.Ordinal);
+    if (separator <= 0 || separator == value.Length - 1)
+    {
+        return null;
+    }
+
+    var keyId = value[..separator];
+    var secret = value[(separator + 1)..];
+    return string.IsNullOrWhiteSpace(keyId) || string.IsNullOrWhiteSpace(secret)
+        ? null
+        : new ApiKeyCredential(keyId, secret);
 }
 
 static string ToPublicStatus(CenteralES.Processing.ProcessingJobStatus status)
@@ -555,6 +653,8 @@ internal sealed record ApiErrorResponse(ApiError Error)
 }
 
 internal sealed record ApiError(string Code, string Message, object? Details, string CorrelationId);
+
+internal readonly record struct ApiKeyCredential(string KeyId, string Secret);
 
 internal sealed record AdminJobListResponse(IReadOnlyList<AdminJobListItemResponse> Jobs);
 

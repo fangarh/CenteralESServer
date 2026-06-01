@@ -38,7 +38,7 @@ Scope:
 
 Scope:
 
-- API key model and auth middleware;
+- API key model and auth middleware; baseline implemented, admin creation/rotation UI remains later in Phase 2/4;
 - admin login/session/CSRF baseline;
 - manual retry одной задачи;
 - audit для admin actions;

@@ -13,6 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Shared\CenteralES.Application\CenteralES.Application.csproj" />
     <ProjectReference Include="..\..\Shared\CenteralES.Infrastructure\CenteralES.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\AccessControl\CenteralES.AccessControl.csproj" />
     <ProjectReference Include="..\..\Modules\Processing\CenteralES.Processing.csproj" />
     <ProjectReference Include="..\..\Modules\PdfStampRecognition\CenteralES.PdfStampRecognition.csproj" />
     <ProjectReference Include="..\..\Modules\Storage\CenteralES.Storage.csproj" />

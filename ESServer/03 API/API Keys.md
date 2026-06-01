@@ -79,6 +79,16 @@ ClientApplication
 8. Use case выполняется.
 ```
 
+Текущий backend skeleton уже реализует этот baseline для Public API:
+
+- таблица `client_applications`;
+- `secretHash` в формате PBKDF2-SHA256, raw secret в БД не хранится;
+- проверка `isActive`, `expiresAt` и `allowedCapabilities`;
+- обновление `lastUsedAt`, `lastUsedIp`, `lastUsedUserAgent` после успешной проверки;
+- `POST /api/pdf-stamp-recognition/jobs`, `GET /api/pdf-stamp-recognition/results/{hash}` и `GET /api/jobs/{jobId}` требуют `Authorization: ApiKey <keyId>.<secret>`.
+
+Создание, отключение и rotation ключей через Admin UI/Admin API остаются отдельным admin-action блоком. Для integration/smoke тестов ключ сидится напрямую в PostgreSQL.
+
 ## Ошибки
 
 ```http

@@ -80,6 +80,7 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - 2026-06-01: Local web+worker smoke now checks `/health/ready` before upload and passed after readiness integration.
 - 2026-06-01: Web `/health/ready` now also verifies minimal processing schema compatibility by checking required processing/result/worker heartbeat tables; local smoke passed with the schema check enabled.
 - 2026-06-01: Phase 1 backend checkpoint recorded in requirements/roadmap; next implementation focus is Phase 2 API key auth for Public API.
+- 2026-06-01: Public API key auth baseline added: `client_applications` table, PBKDF2 secret hashes, PostgreSQL authenticator, `Authorization: ApiKey <keyId>.<secret>` enforcement on Public API endpoints, 401/403 contract tests, and local smoke with seeded API key.
 
 ## Workflow Rules
 
@@ -89,4 +90,4 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-06-01 after Phase 1 backend checkpoint*
+*Last updated: 2026-06-01 after Public API key auth checkpoint*

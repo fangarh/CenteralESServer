@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Shared\CenteralES.Domain\CenteralES.Domain.csproj" />
     <ProjectReference Include="..\..\src\Shared\CenteralES.Application\CenteralES.Application.csproj" />
+    <ProjectReference Include="..\..\src\Modules\AccessControl\CenteralES.AccessControl.csproj" />
     <ProjectReference Include="..\..\src\Modules\Processing\CenteralES.Processing.csproj" />
     <ProjectReference Include="..\..\src\Modules\PdfStampRecognition\CenteralES.PdfStampRecognition.csproj" />
     <ProjectReference Include="..\..\src\Modules\Storage\CenteralES.Storage.csproj" />

@@ -80,6 +80,21 @@ public static class PostgresProcessingSql
 
         create index if not exists ix_processing_worker_heartbeats_processor
             on processing_worker_heartbeats (processor_key, capability, heartbeat_at desc);
+
+        create table if not exists client_applications (
+            key_id text primary key,
+            name text not null,
+            secret_hash text not null,
+            is_active boolean not null,
+            allowed_capabilities text[] not null,
+            created_at timestamptz not null,
+            updated_at timestamptz not null,
+            expires_at timestamptz null,
+            last_used_at timestamptz null,
+            last_used_ip text null,
+            last_used_user_agent text null,
+            disabled_at timestamptz null
+        );
         """;
 
     public const string ClaimNext = """

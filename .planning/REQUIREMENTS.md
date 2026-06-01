@@ -20,9 +20,9 @@
 
 ### Security
 
-- [ ] **SEC-01**: Public API принимает `Authorization: ApiKey <keyId>.<secret>`.
-- [ ] **SEC-02**: Сервер хранит только hash API key secret.
-- [ ] **SEC-03**: API key может быть отключён и ограничен allowed capabilities.
+- [x] **SEC-01**: Public API принимает `Authorization: ApiKey <keyId>.<secret>`.
+- [x] **SEC-02**: Сервер хранит только hash API key secret.
+- [x] **SEC-03**: API key может быть отключён и ограничен allowed capabilities.
 
 ### Queue and Processing
 
@@ -89,9 +89,9 @@
 | API-02 | Phase 1 | Done |
 | API-03 | Phase 1 | Done |
 | API-04 | Phase 1 | Done |
-| SEC-01 | Phase 2 | Pending |
-| SEC-02 | Phase 2 | Pending |
-| SEC-03 | Phase 2 | Pending |
+| SEC-01 | Phase 2 | Done |
+| SEC-02 | Phase 2 | Done |
+| SEC-03 | Phase 2 | Done |
 | QUEUE-01 | Phase 1 | Done |
 | QUEUE-02 | Phase 1 | Done |
 | QUEUE-03 | Phase 1 | Done |
@@ -120,4 +120,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-01 after Phase 1 backend checkpoint*
+*Last updated: 2026-06-01 after Public API key auth checkpoint*

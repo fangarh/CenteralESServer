@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\CenteralES.Application\CenteralES.Application.csproj" />
     <ProjectReference Include="..\CenteralES.Domain\CenteralES.Domain.csproj" />
+    <ProjectReference Include="..\..\Modules\AccessControl\CenteralES.AccessControl.csproj" />
     <ProjectReference Include="..\..\Modules\Admin\CenteralES.Admin.csproj" />
     <ProjectReference Include="..\..\Modules\Processing\CenteralES.Processing.csproj" />
     <ProjectReference Include="..\..\Modules\PdfStampRecognition\CenteralES.PdfStampRecognition.csproj" />
