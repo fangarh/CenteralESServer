@@ -259,6 +259,14 @@ retry одной задачи
 
 Retry одной задачи запускается из `Job Details`.
 
+Текущий backend skeleton:
+
+```http
+POST /api/admin/jobs/{jobId}/retry
+```
+
+Endpoint требует admin session cookie и `X-CSRF-Token`, создаёт новую queued attempt для текущей failed/blocked job и пишет audit event.
+
 Массовый retry запускается из списка задач после фильтрации, например:
 
 ```text

@@ -1,3 +1,4 @@
+using CenteralES.Admin;
 using CenteralES.Infrastructure.Postgres;
 using CenteralES.Infrastructure.PdfStampRecognition;
 using CenteralES.Infrastructure.Processing;
@@ -260,6 +261,122 @@ public sealed class PostgresProcessingJobQueueTests
     }
 
     [Fact]
+    public async Task Manual_retry_creates_queued_attempt_and_audit_event_for_current_blocked_job()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var now = DateTimeOffset.UtcNow;
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var actions = new PostgresAdminProcessingActionStore(dataSource);
+        var command = new CreateProcessingJobCommand(
+            PdfStampRecognitionConstants.Capability,
+            $"sha256:{Guid.NewGuid():N}",
+            $"temp/{Guid.NewGuid():N}.pdf",
+            now);
+
+        var enqueued = await queue.EnqueueAsync(command, CancellationToken.None);
+        var claimed = await queue.ClaimNextAsync(now.AddSeconds(1), CancellationToken.None);
+
+        Assert.NotNull(claimed);
+
+        await queue.FailAsync(
+            new FailProcessingJobCommand(
+                claimed.JobId,
+                claimed.SubjectId,
+                NormalizedProcessorError.ProcessorContractError,
+                Final: true,
+                new AttemptDiagnostics(
+                    Endpoint: "https://pdf2txt.local/recognize_json/",
+                    Duration: TimeSpan.FromMilliseconds(100),
+                    HttpStatus: 200,
+                    NormalizedError: NormalizedProcessorError.ProcessorContractError,
+                    Retryable: true,
+                    CorrelationId: "corr-blocked",
+                    RawErrorExcerpt: "Unexpected response."),
+                now.AddSeconds(2)),
+            CancellationToken.None);
+
+        var retry = await actions.ManualRetryJobAsync(
+            new AdminManualRetryJobCommand(
+                enqueued.JobId,
+                Guid.NewGuid(),
+                "admin",
+                now.AddSeconds(3),
+                "retry once",
+                "127.0.0.1",
+                "integration-test"),
+            CancellationToken.None);
+
+        var current = await queue.GetCurrentByHashAsync(PdfStampRecognitionConstants.Capability, command.ContentHash, CancellationToken.None);
+        var retryClaim = await queue.ClaimNextAsync(now.AddSeconds(4), CancellationToken.None);
+        var audit = await ReadAuditEventAsync(dataSource, retry.AuditId!.Value, CancellationToken.None);
+
+        Assert.Equal(AdminManualRetryJobStatus.Success, retry.Status);
+        Assert.NotNull(current);
+        Assert.Equal(retry.NewJobId, current.JobId);
+        Assert.Equal(2, current.AttemptNumber);
+        Assert.Equal(ProcessingJobStatus.Queued, current.Status);
+        Assert.NotNull(retryClaim);
+        Assert.Equal(retry.NewJobId, retryClaim.JobId);
+        Assert.Equal(claimed.TemporaryFileKey, retryClaim.TemporaryFileKey);
+        Assert.Equal(AdminAuditActions.ManualRetryJob, audit.Action);
+        Assert.Equal(enqueued.JobId.ToString("N"), audit.TargetId);
+        Assert.Contains(retry.NewJobId!.Value.ToString("N"), audit.NewValueJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Manual_retry_rejects_non_current_or_active_job()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var now = DateTimeOffset.UtcNow;
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var actions = new PostgresAdminProcessingActionStore(dataSource);
+        var enqueued = await queue.EnqueueAsync(
+            new CreateProcessingJobCommand(
+                PdfStampRecognitionConstants.Capability,
+                $"sha256:{Guid.NewGuid():N}",
+                $"temp/{Guid.NewGuid():N}.pdf",
+                now),
+            CancellationToken.None);
+
+        var retry = await actions.ManualRetryJobAsync(
+            new AdminManualRetryJobCommand(
+                enqueued.JobId,
+                Guid.NewGuid(),
+                "admin",
+                now.AddSeconds(1),
+                null,
+                null,
+                null),
+            CancellationToken.None);
+
+        Assert.Equal(AdminManualRetryJobStatus.Conflict, retry.Status);
+    }
+
+    [Fact]
     public async Task Worker_heartbeat_is_visible_in_admin_processor_status()
     {
         var connectionString = IntegrationTestDatabase.TryReadConnectionString();
@@ -306,6 +423,7 @@ public sealed class PostgresProcessingJobQueueTests
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = new NpgsqlCommand("""
             truncate table
+                admin_audit_events,
                 processing_worker_heartbeats,
                 pdf_stamp_recognition_results,
                 processing_attempt_diagnostics,
@@ -316,4 +434,28 @@ public sealed class PostgresProcessingJobQueueTests
             """, connection);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
+
+    private static async Task<AuditEventRow> ReadAuditEventAsync(
+        NpgsqlDataSource dataSource,
+        Guid auditId,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("""
+            select action, target_id, new_value_json::text
+            from admin_audit_events
+            where id = @id;
+            """, connection);
+        command.Parameters.AddWithValue("id", auditId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        Assert.True(await reader.ReadAsync(cancellationToken));
+
+        return new AuditEventRow(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetString(2));
+    }
+
+    private sealed record AuditEventRow(string Action, string TargetId, string NewValueJson);
 }

@@ -41,4 +41,14 @@ public sealed class PostgresProcessingSqlTests
         Assert.Contains("session_token_hash text not null unique", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("csrf_token_hash text not null", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Schema_contains_append_only_admin_audit_events()
+    {
+        Assert.Contains("create table if not exists admin_audit_events", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("action text not null", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("target_type text not null", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("old_value_json jsonb null", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("new_value_json jsonb null", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+    }
 }

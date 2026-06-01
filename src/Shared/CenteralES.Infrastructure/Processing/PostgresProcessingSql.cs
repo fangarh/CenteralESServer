@@ -128,6 +128,29 @@ public static class PostgresProcessingSql
         create index if not exists ix_admin_sessions_active
             on admin_sessions (admin_user_id, expires_at, idle_expires_at)
             where revoked_at is null;
+
+        create table if not exists admin_audit_events (
+            id uuid primary key,
+            occurred_at timestamptz not null,
+            actor_admin_id uuid null,
+            actor_login text null,
+            action text not null,
+            target_type text not null,
+            target_id text not null,
+            old_value_json jsonb null,
+            new_value_json jsonb null,
+            comment text null,
+            correlation_id text not null,
+            ip text null,
+            user_agent text null,
+            technical_metadata_json jsonb null
+        );
+
+        create index if not exists ix_admin_audit_events_target
+            on admin_audit_events (target_type, target_id, occurred_at desc);
+
+        create index if not exists ix_admin_audit_events_actor
+            on admin_audit_events (actor_admin_id, occurred_at desc);
         """;
 
     public const string ClaimNext = """

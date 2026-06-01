@@ -29,6 +29,7 @@ builder.Services.AddSingleton<IProcessingJobQueue, PostgresProcessingJobQueue>()
 builder.Services.AddSingleton<IPdfStampRecognitionResultStore, PostgresPdfStampRecognitionResultStore>();
 builder.Services.AddSingleton<ITemporaryFileStore>(_ => new LocalTemporaryFileStore(temporaryStorageRoot));
 builder.Services.AddSingleton<IAdminProcessingReadStore, PostgresAdminProcessingReadStore>();
+builder.Services.AddSingleton<IAdminProcessingActionStore, PostgresAdminProcessingActionStore>();
 
 var app = builder.Build();
 
@@ -340,6 +341,67 @@ app.MapGet("/api/admin/jobs/{jobId}", async (
 })
     .WithName("AdminGetJob");
 
+app.MapPost("/api/admin/jobs/{jobId}/retry", async (
+    string jobId,
+    AdminManualRetryRequestBody retry,
+    HttpRequest request,
+    IAdminAuthenticator adminAuthenticator,
+    IAdminProcessingActionStore actionStore,
+    CancellationToken cancellationToken) =>
+{
+    var authorization = await AuthorizeAdminApiAsync(
+        request,
+        adminAuthenticator,
+        requireCsrf: true,
+        cancellationToken);
+    if (authorization.Error is not null)
+    {
+        return authorization.Error;
+    }
+
+    if (!Guid.TryParse(jobId, out var parsedJobId))
+    {
+        return Results.BadRequest(ApiErrorResponse.Create("invalid_input", $"Job id '{jobId}' is not a valid GUID."));
+    }
+
+    var comment = retry.Comment?.Trim();
+    if (comment?.Length > 1000)
+    {
+        return Results.BadRequest(ApiErrorResponse.Create("invalid_input", "Retry comment must not exceed 1000 characters."));
+    }
+
+    var principal = authorization.Principal!;
+    var result = await actionStore.ManualRetryJobAsync(
+        new AdminManualRetryJobCommand(
+            parsedJobId,
+            principal.UserId,
+            principal.Login,
+            DateTimeOffset.UtcNow,
+            comment,
+            request.HttpContext.Connection.RemoteIpAddress?.ToString(),
+            request.Headers.UserAgent.ToString()),
+        cancellationToken);
+
+    return result.Status switch
+    {
+        AdminManualRetryJobStatus.Success => Results.Accepted(
+            $"/api/jobs/{result.NewJobId:N}",
+            new AdminManualRetryResponse(
+                result.SourceJobId!.Value.ToString("N"),
+                result.NewJobId!.Value.ToString("N"),
+                result.ContentHash!,
+                result.AttemptNumber!.Value,
+                ToPublicStatus(result.NewStatus!.Value),
+                result.AuditId!.Value.ToString("N"))),
+        AdminManualRetryJobStatus.NotFound => Results.NotFound(
+            ApiErrorResponse.Create("job_not_found", $"Job '{jobId}' was not found.")),
+        _ => Results.Json(
+            ApiErrorResponse.Create("retry_not_allowed", "Manual retry is allowed only for the current failed or blocked job."),
+            statusCode: StatusCodes.Status409Conflict)
+    };
+})
+    .WithName("AdminManualRetryJob");
+
 app.MapGet("/api/admin/processors/{processorKey}", async (
     string processorKey,
     HttpRequest request,
@@ -472,7 +534,8 @@ static async Task<HealthCheckItemResponse> CheckProcessingSchemaAsync(
                 and to_regclass('public.processing_worker_heartbeats') is not null
                 and to_regclass('public.client_applications') is not null
                 and to_regclass('public.admin_users') is not null
-                and to_regclass('public.admin_sessions') is not null;
+                and to_regclass('public.admin_sessions') is not null
+                and to_regclass('public.admin_audit_events') is not null;
             """, connection);
         var compatible = await command.ExecuteScalarAsync(cancellationToken);
         return new HealthCheckItemResponse(
@@ -862,6 +925,16 @@ internal sealed record AdminUserResponse(
     string Role);
 
 internal sealed record AdminAuthorizationResult(IResult? Error, AdminPrincipal? Principal);
+
+internal sealed record AdminManualRetryRequestBody(string? Comment);
+
+internal sealed record AdminManualRetryResponse(
+    string SourceJobId,
+    string JobId,
+    string Hash,
+    int AttemptNumber,
+    string Status,
+    string AuditId);
 
 internal sealed record AdminJobListResponse(IReadOnlyList<AdminJobListItemResponse> Jobs);
 

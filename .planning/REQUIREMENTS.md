@@ -50,7 +50,7 @@
 ### Admin and Operations
 
 - [ ] **ADMIN-01**: Admin UI показывает минимальную видимость очереди, failed/blocked jobs и processor health.
-- [ ] **ADMIN-02**: Admin может выполнить manual retry одной failed/blocked задачи.
+- [x] **ADMIN-02**: Admin может выполнить manual retry одной failed/blocked задачи.
 - [ ] **ADMIN-03**: Audit фиксирует опасные admin actions.
 - [x] **HEALTH-01**: Web предоставляет `/health/live` и `/health/ready`.
 - [x] **HEALTH-02**: Worker пишет heartbeat каждые `30 seconds`, stale threshold `3 minutes`.
@@ -108,8 +108,8 @@
 | STORE-03 | Phase 1 | Done |
 | STORE-04 | Phase 2 | Pending |
 | ADMIN-01 | Phase 1 | Partial: Admin API done, UI pending |
-| ADMIN-02 | Phase 2 | Pending |
-| ADMIN-03 | Phase 2 | Pending |
+| ADMIN-02 | Phase 2 | Done: Backend endpoint, UI pending |
+| ADMIN-03 | Phase 2 | Partial: manual retry audit done |
 | HEALTH-01 | Phase 2 | Done |
 | HEALTH-02 | Phase 2 | Done |
 | DEPLOY-01 | Phase 3 | Pending |
@@ -122,4 +122,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-01 after admin session auth checkpoint*
+*Last updated: 2026-06-01 after manual retry/audit checkpoint*

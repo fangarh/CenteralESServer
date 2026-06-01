@@ -5,7 +5,10 @@ using System.Text;
 using System.Text.Json;
 using CenteralES.AccessControl;
 using CenteralES.Infrastructure.Postgres;
+using CenteralES.Infrastructure.Processing;
 using CenteralES.PdfStampRecognition;
+using CenteralES.Processing;
+using CenteralES.Processing.Queue;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Npgsql;
 
@@ -289,6 +292,44 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task Admin_manual_retry_requires_csrf_and_creates_new_queued_attempt()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = await CreateAuthorizedClientAsync(_factory);
+        var admin = await CreateAdminClientAsync(_factory);
+        var blocked = await CreateBlockedProcessingJobAsync();
+
+        var withoutCsrf = await admin.Client.PostAsJsonAsync(
+            $"/api/admin/jobs/{blocked.JobId:N}/retry",
+            new { Comment = "retry from test" });
+
+        using var retryRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/admin/jobs/{blocked.JobId:N}/retry");
+        retryRequest.Headers.Add("X-CSRF-Token", admin.CsrfToken);
+        retryRequest.Content = JsonContent.Create(new { Comment = "retry from test" });
+        var retry = await admin.Client.SendAsync(retryRequest);
+        var payload = await retry.Content.ReadFromJsonAsync<JsonElement>();
+        var newJobId = payload.GetProperty("jobId").GetString();
+        var byJob = await client.GetAsync($"/api/jobs/{newJobId}");
+        var byJobPayload = await byJob.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Forbidden, withoutCsrf.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, retry.StatusCode);
+        Assert.Equal(blocked.JobId.ToString("N"), payload.GetProperty("sourceJobId").GetString());
+        Assert.Equal(blocked.Hash, payload.GetProperty("hash").GetString());
+        Assert.Equal(2, payload.GetProperty("attemptNumber").GetInt32());
+        Assert.Equal("queued", payload.GetProperty("status").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(payload.GetProperty("auditId").GetString()));
+
+        Assert.Equal(HttpStatusCode.OK, byJob.StatusCode);
+        Assert.Equal(newJobId, byJobPayload.GetProperty("jobId").GetString());
+        Assert.Equal("queued", byJobPayload.GetProperty("status").GetString());
+    }
+
+    [Fact]
     public async Task Admin_processor_status_returns_queue_counts_without_external_health_call()
     {
         if (!HasConfiguredTestDatabase())
@@ -456,5 +497,68 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         await command.ExecuteNonQueryAsync(CancellationToken.None);
     }
 
+    private static async Task<BlockedJobFixture> CreateBlockedProcessingJobAsync()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString()
+            ?? throw new InvalidOperationException("Test database is not configured.");
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var now = DateTimeOffset.UtcNow;
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var hash = $"sha256:{Guid.NewGuid():N}";
+        var enqueued = await queue.EnqueueAsync(
+            new CreateProcessingJobCommand(
+                PdfStampRecognitionConstants.Capability,
+                hash,
+                $"temp/{Guid.NewGuid():N}.pdf",
+                now),
+            CancellationToken.None);
+        var claimed = await queue.ClaimNextAsync(now.AddSeconds(1), CancellationToken.None)
+            ?? throw new InvalidOperationException("Expected test job to be claimable.");
+
+        await queue.FailAsync(
+            new FailProcessingJobCommand(
+                claimed.JobId,
+                claimed.SubjectId,
+                NormalizedProcessorError.ProcessorContractError,
+                Final: true,
+                new AttemptDiagnostics(
+                    Endpoint: "https://pdf2txt.local/recognize_json/",
+                    Duration: TimeSpan.FromMilliseconds(10),
+                    HttpStatus: 200,
+                    NormalizedError: NormalizedProcessorError.ProcessorContractError,
+                    Retryable: true,
+                    CorrelationId: $"corr-{Guid.NewGuid():N}",
+                    RawErrorExcerpt: "Unexpected response."),
+                now.AddSeconds(2)),
+            CancellationToken.None);
+
+        return new BlockedJobFixture(enqueued.JobId, hash);
+    }
+
+    private static async Task ResetProcessingTablesAsync(NpgsqlDataSource dataSource, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("""
+            truncate table
+                admin_audit_events,
+                processing_worker_heartbeats,
+                pdf_stamp_recognition_results,
+                processing_attempt_diagnostics,
+                processing_result_index,
+                processing_jobs,
+                processing_subjects
+            cascade;
+            """, connection);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private sealed record AdminTestSession(HttpClient Client, string Login, string CsrfToken);
+
+    private sealed record BlockedJobFixture(Guid JobId, string Hash);
 }

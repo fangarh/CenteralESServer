@@ -192,6 +192,24 @@ internal_error -> depends on transient flag
 - создать новую попытку;
 - записать действие в audit.
 
+Текущий backend skeleton:
+
+```http
+POST /api/admin/jobs/{jobId}/retry
+```
+
+Endpoint:
+
+- требует admin session cookie;
+- требует `X-CSRF-Token`;
+- разрешает retry только для текущей `failed` или `blocked` job;
+- создаёт новую `queued` attempt с `attemptNumber + 1`;
+- переводит `processing_subjects.current_job_id` на новую attempt;
+- пишет append-only audit event `manual_retry_job`;
+- возвращает `409 retry_not_allowed`, если job не является текущей failed/blocked попыткой.
+
+Ограничение текущего skeleton: если temporary input уже удалён после terminal state, новая attempt будет создана, но Worker не сможет открыть файл и безопасно переведёт попытку в terminal error. Для полноценного ручного retry после cleanup нужен отдельный retention/reupload/result-storage сценарий.
+
 ## Worker recovery
 
 Если worker умер во время обработки:
