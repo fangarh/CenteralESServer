@@ -60,6 +60,53 @@ public sealed record AdminProcessingAttemptDetails(
     bool? Retryable,
     string? CorrelationId);
 
+public sealed record AdminJobSupportReport(
+    DateTimeOffset GeneratedAt,
+    Guid JobId,
+    Guid SubjectId,
+    string Capability,
+    string ProcessorKey,
+    string ContentHash,
+    int AttemptNumber,
+    ProcessingJobStatus Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? FinishedAt,
+    DateTimeOffset? HeartbeatAt,
+    AdminJobSupportReportDiagnostics Diagnostics,
+    IReadOnlyList<AdminProcessingAttemptDetails> Attempts,
+    AdminJobSupportReportResultReference? Result,
+    AdminProcessorStatus Processor,
+    IReadOnlyList<AdminJobSupportReportAuditEvent> AuditEvents);
+
+public sealed record AdminJobSupportReportDiagnostics(
+    string? Endpoint,
+    TimeSpan? Duration,
+    int? HttpStatus,
+    NormalizedProcessorError? NormalizedError,
+    bool? Retryable,
+    string? CorrelationId,
+    string? Excerpt);
+
+public sealed record AdminJobSupportReportResultReference(
+    Guid ResultIndexId,
+    string ResultKind,
+    string PayloadTable,
+    Guid PayloadId,
+    string ContractVersion,
+    long PayloadSize,
+    DateTimeOffset CreatedAt);
+
+public sealed record AdminJobSupportReportAuditEvent(
+    Guid AuditId,
+    DateTimeOffset OccurredAt,
+    string? ActorLogin,
+    string Action,
+    string TargetType,
+    string TargetId,
+    string? Comment,
+    string CorrelationId);
+
 public sealed record AdminProcessorStatus(
     string ProcessorKey,
     string Capability,
@@ -100,6 +147,11 @@ public interface IAdminProcessingReadStore
         CancellationToken cancellationToken);
 
     Task<AdminProcessingJobDetails?> GetJobAsync(Guid jobId, CancellationToken cancellationToken);
+
+    Task<AdminJobSupportReport?> GetJobSupportReportAsync(
+        Guid jobId,
+        string processorKey,
+        CancellationToken cancellationToken);
 
     Task<AdminProcessorStatus> GetProcessorStatusAsync(
         string processorKey,

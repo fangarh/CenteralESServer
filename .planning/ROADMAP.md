@@ -45,7 +45,7 @@ Scope:
 - health live/ready и Worker heartbeat; baseline already implemented in Phase 1, remaining work is hardening/admin visibility;
 - temporary storage hard/soft limit behavior; backend hard-limit block implemented, Admin UI warning remains Phase 4;
 - blocked/final failure handling;
-- support report MVP.
+- support report MVP; backend endpoint implemented, UI/export button remains Phase 4.
 
 ### Phase 3: Docker Compose Delivery MVP
 
@@ -94,4 +94,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-01 after temporary storage hard-limit checkpoint*
+*Last updated: 2026-06-01 after support report MVP checkpoint*

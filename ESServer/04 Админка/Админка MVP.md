@@ -328,6 +328,14 @@ Raw JSON показывается отдельно и не должен быть
 
 Минимально экспорт доступен из `Job Details`.
 
+Текущий backend skeleton:
+
+```http
+GET /api/admin/jobs/{jobId}/support-report
+```
+
+Endpoint требует admin session cookie, является read-only и не требует `X-CSRF-Token`. Он возвращает JSON-контекст для последующего UI/export: job/subject identifiers, capability, processor key, status, attempts, обрезанный diagnostics excerpt, passive processor/queue/worker snapshot, result index reference и audit events, связанные с attempts этого subject.
+
 Если результат уже есть, `Result Details` может давать связанный экспорт контекста результата.
 
 Отчёт должен включать:
@@ -353,6 +361,8 @@ technical metadata
 Для ошибок внешнего processor-а админка показывает нормализованный код, понятный текст, endpoint, HTTP status, retryable true/false, номер attempt, raw error в технических деталях и `correlationId`.
 
 Raw diagnostic details показываются только как обрезанный и очищенный excerpt из attempt diagnostics. Полные response payload, входные файлы и secrets в админке не отображаются.
+
+Текущий backend skeleton не возвращает `temporaryFileKey`, входной PDF и raw result payload в support report. `result` содержит только reference на `processing_result_index` и payload metadata.
 
 По умолчанию отчёт не включает:
 

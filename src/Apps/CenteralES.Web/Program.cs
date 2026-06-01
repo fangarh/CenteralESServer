@@ -355,6 +355,38 @@ app.MapGet("/api/admin/jobs/{jobId}", async (
 })
     .WithName("AdminGetJob");
 
+app.MapGet("/api/admin/jobs/{jobId}/support-report", async (
+    string jobId,
+    HttpRequest request,
+    IAdminAuthenticator adminAuthenticator,
+    IAdminProcessingReadStore readStore,
+    CancellationToken cancellationToken) =>
+{
+    var authorization = await AuthorizeAdminApiAsync(
+        request,
+        adminAuthenticator,
+        requireCsrf: false,
+        cancellationToken);
+    if (authorization.Error is not null)
+    {
+        return authorization.Error;
+    }
+
+    if (!Guid.TryParse(jobId, out var parsedJobId))
+    {
+        return Results.BadRequest(ApiErrorResponse.Create("invalid_input", $"Job id '{jobId}' is not a valid GUID."));
+    }
+
+    var report = await readStore.GetJobSupportReportAsync(
+        parsedJobId,
+        PdfStampRecognitionConstants.ProcessorKey,
+        cancellationToken);
+    return report is null
+        ? Results.NotFound(ApiErrorResponse.Create("job_not_found", $"Job '{jobId}' was not found."))
+        : Results.Ok(ToAdminJobSupportReportResponse(report));
+})
+    .WithName("AdminGetJobSupportReport");
+
 app.MapPost("/api/admin/jobs/{jobId}/retry", async (
     string jobId,
     AdminManualRetryRequestBody retry,
@@ -852,6 +884,44 @@ static AdminJobDetailsResponse ToAdminJobDetailsResponse(AdminProcessingJobDetai
         job.Attempts.Select(ToAdminProcessingAttemptResponse).ToArray());
 }
 
+static AdminJobSupportReportResponse ToAdminJobSupportReportResponse(AdminJobSupportReport report)
+{
+    return new AdminJobSupportReportResponse(
+        report.GeneratedAt,
+        report.JobId.ToString("N"),
+        report.SubjectId.ToString("N"),
+        report.Capability,
+        report.ProcessorKey,
+        report.ContentHash,
+        report.AttemptNumber,
+        ToPublicStatus(report.Status),
+        report.CreatedAt,
+        report.StartedAt,
+        report.FinishedAt,
+        report.HeartbeatAt,
+        new AdminJobSupportReportDiagnosticsResponse(
+            report.Diagnostics.Endpoint,
+            report.Diagnostics.Duration?.TotalMilliseconds,
+            report.Diagnostics.HttpStatus,
+            report.Diagnostics.NormalizedError?.ToString(),
+            report.Diagnostics.Retryable,
+            report.Diagnostics.CorrelationId,
+            report.Diagnostics.Excerpt),
+        report.Attempts.Select(ToAdminProcessingAttemptResponse).ToArray(),
+        report.Result is null
+            ? null
+            : new AdminJobSupportReportResultReferenceResponse(
+                report.Result.ResultIndexId.ToString("N"),
+                report.Result.ResultKind,
+                report.Result.PayloadTable,
+                report.Result.PayloadId.ToString("N"),
+                report.Result.ContractVersion,
+                report.Result.PayloadSize,
+                report.Result.CreatedAt),
+        ToAdminProcessorStatusResponse(report.Processor),
+        report.AuditEvents.Select(ToAdminJobSupportReportAuditEventResponse).ToArray());
+}
+
 static AdminProcessingAttemptResponse ToAdminProcessingAttemptResponse(AdminProcessingAttemptDetails attempt)
 {
     return new AdminProcessingAttemptResponse(
@@ -867,6 +937,20 @@ static AdminProcessingAttemptResponse ToAdminProcessingAttemptResponse(AdminProc
         attempt.NormalizedError?.ToString(),
         attempt.Retryable,
         attempt.CorrelationId);
+}
+
+static AdminJobSupportReportAuditEventResponse ToAdminJobSupportReportAuditEventResponse(
+    AdminJobSupportReportAuditEvent audit)
+{
+    return new AdminJobSupportReportAuditEventResponse(
+        audit.AuditId.ToString("N"),
+        audit.OccurredAt,
+        audit.ActorLogin,
+        audit.Action,
+        audit.TargetType,
+        audit.TargetId,
+        audit.Comment,
+        audit.CorrelationId);
 }
 
 static AdminProcessorStatusResponse ToAdminProcessorStatusResponse(AdminProcessorStatus status)
@@ -1016,6 +1100,53 @@ internal sealed record AdminJobDetailsResponse(
     DateTimeOffset UpdatedAt,
     AdminAttemptDiagnosticsResponse Diagnostics,
     IReadOnlyList<AdminProcessingAttemptResponse> Attempts);
+
+internal sealed record AdminJobSupportReportResponse(
+    DateTimeOffset GeneratedAt,
+    string JobId,
+    string SubjectId,
+    string Capability,
+    string ProcessorKey,
+    string Hash,
+    int AttemptNumber,
+    string Status,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? FinishedAt,
+    DateTimeOffset? HeartbeatAt,
+    AdminJobSupportReportDiagnosticsResponse Diagnostics,
+    IReadOnlyList<AdminProcessingAttemptResponse> Attempts,
+    AdminJobSupportReportResultReferenceResponse? Result,
+    AdminProcessorStatusResponse Processor,
+    IReadOnlyList<AdminJobSupportReportAuditEventResponse> AuditEvents);
+
+internal sealed record AdminJobSupportReportDiagnosticsResponse(
+    string? Endpoint,
+    double? DurationMs,
+    int? HttpStatus,
+    string? NormalizedError,
+    bool? Retryable,
+    string? CorrelationId,
+    string? Excerpt);
+
+internal sealed record AdminJobSupportReportResultReferenceResponse(
+    string ResultIndexId,
+    string ResultKind,
+    string PayloadTable,
+    string PayloadId,
+    string ContractVersion,
+    long PayloadSize,
+    DateTimeOffset CreatedAt);
+
+internal sealed record AdminJobSupportReportAuditEventResponse(
+    string AuditId,
+    DateTimeOffset OccurredAt,
+    string? ActorLogin,
+    string Action,
+    string TargetType,
+    string TargetId,
+    string? Comment,
+    string CorrelationId);
 
 internal sealed record AdminAttemptDiagnosticsResponse(
     string? Endpoint,

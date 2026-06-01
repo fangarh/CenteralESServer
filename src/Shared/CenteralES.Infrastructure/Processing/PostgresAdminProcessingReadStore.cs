@@ -139,6 +139,58 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
         return details with { Attempts = attempts };
     }
 
+    public async Task<AdminJobSupportReport?> GetJobSupportReportAsync(
+        Guid jobId,
+        string processorKey,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(processorKey);
+
+        var job = await GetJobAsync(jobId, cancellationToken);
+        if (job is null)
+        {
+            return null;
+        }
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        var result = await ReadResultReferenceAsync(connection, job.SubjectId, cancellationToken);
+        var auditEvents = await ReadAuditEventsAsync(
+            connection,
+            job.Attempts.Select(attempt => attempt.JobId).Append(job.JobId),
+            cancellationToken);
+        var processor = await GetProcessorStatusAsync(
+            processorKey,
+            job.Capability,
+            recentDiagnosticsLimit: 10,
+            cancellationToken);
+
+        return new AdminJobSupportReport(
+            DateTimeOffset.UtcNow,
+            job.JobId,
+            job.SubjectId,
+            job.Capability,
+            processorKey,
+            job.ContentHash,
+            job.AttemptNumber,
+            job.Status,
+            job.CreatedAt,
+            job.StartedAt,
+            job.FinishedAt,
+            job.HeartbeatAt,
+            new AdminJobSupportReportDiagnostics(
+                job.Endpoint,
+                job.Duration,
+                job.HttpStatus,
+                job.NormalizedError,
+                job.Retryable,
+                job.CorrelationId,
+                ToSafeExcerpt(job.RawErrorExcerpt)),
+            job.Attempts,
+            result,
+            processor,
+            auditEvents);
+    }
+
     public async Task<AdminProcessorStatus> GetProcessorStatusAsync(
         string processorKey,
         string capability,
@@ -287,6 +339,91 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
         return diagnostics;
     }
 
+    private static async Task<AdminJobSupportReportResultReference?> ReadResultReferenceAsync(
+        NpgsqlConnection connection,
+        Guid subjectId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new NpgsqlCommand("""
+            select
+                id,
+                result_kind,
+                payload_table,
+                payload_id,
+                contract_version,
+                payload_size,
+                created_at
+            from processing_result_index
+            where subject_id = @subject_id;
+            """, connection);
+        command.Parameters.AddWithValue("subject_id", subjectId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new AdminJobSupportReportResultReference(
+            reader.GetGuid(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetGuid(3),
+            reader.GetString(4),
+            reader.GetInt64(5),
+            reader.GetFieldValue<DateTimeOffset>(6));
+    }
+
+    private static async Task<IReadOnlyList<AdminJobSupportReportAuditEvent>> ReadAuditEventsAsync(
+        NpgsqlConnection connection,
+        IEnumerable<Guid> jobIds,
+        CancellationToken cancellationToken)
+    {
+        var targetIds = jobIds
+            .Distinct()
+            .Select(jobId => jobId.ToString("N"))
+            .ToArray();
+        if (targetIds.Length == 0)
+        {
+            return Array.Empty<AdminJobSupportReportAuditEvent>();
+        }
+
+        await using var command = new NpgsqlCommand("""
+            select
+                id,
+                occurred_at,
+                actor_login,
+                action,
+                target_type,
+                target_id,
+                comment,
+                correlation_id
+            from admin_audit_events
+            where target_type = 'processing_job'
+              and target_id = any(@target_ids)
+            order by occurred_at desc
+            limit 20;
+            """, connection);
+        command.Parameters.AddWithValue("target_ids", targetIds);
+
+        var events = new List<AdminJobSupportReportAuditEvent>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            events.Add(new AdminJobSupportReportAuditEvent(
+                reader.GetGuid(0),
+                reader.GetFieldValue<DateTimeOffset>(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetString(5),
+                reader.IsDBNull(6) ? null : ToSafeExcerpt(reader.GetString(6)),
+                reader.GetString(7)));
+        }
+
+        return events;
+    }
+
     private static async Task<IReadOnlyList<AdminProcessingAttemptDetails>> ReadAttemptsAsync(
         NpgsqlConnection connection,
         Guid subjectId,
@@ -333,6 +470,21 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
         }
 
         return attempts;
+    }
+
+    private static string? ToSafeExcerpt(string? value)
+    {
+        const int maxLength = 2000;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = value.Trim();
+        return normalized.Length <= maxLength
+            ? normalized
+            : string.Concat(normalized.AsSpan(0, maxLength), "...");
     }
 
     private static string? ToDatabaseStatus(ProcessingJobStatus? status)

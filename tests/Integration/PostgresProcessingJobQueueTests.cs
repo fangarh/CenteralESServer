@@ -111,6 +111,76 @@ public sealed class PostgresProcessingJobQueueTests
     }
 
     [Fact]
+    public async Task Support_report_includes_result_index_reference_without_payload()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var resultStore = new PostgresPdfStampRecognitionResultStore(dataSource);
+        var adminStore = new PostgresAdminProcessingReadStore(dataSource);
+        var command = new CreateProcessingJobCommand(
+            PdfStampRecognitionConstants.Capability,
+            $"sha256:{Guid.NewGuid():N}",
+            $"temp/{Guid.NewGuid():N}.pdf",
+            DateTimeOffset.UtcNow);
+
+        var enqueued = await queue.EnqueueAsync(command, CancellationToken.None);
+        var claimed = await queue.ClaimNextAsync(DateTimeOffset.UtcNow.AddSeconds(1), CancellationToken.None);
+
+        Assert.NotNull(claimed);
+
+        var saved = await resultStore.SaveAsync(
+            new SavePdfStampRecognitionResultCommand(
+                claimed.SubjectId,
+                claimed.JobId,
+                claimed.ContentHash,
+                """{"source":"support-report-test","people":[{"name":"hidden payload"}]}""",
+                "test-v1",
+                DateTimeOffset.UtcNow),
+            CancellationToken.None);
+
+        await queue.CompleteAsync(
+            new CompleteProcessingJobCommand(
+                claimed.JobId,
+                claimed.SubjectId,
+                saved.ResultIndexId,
+                new AttemptDiagnostics(
+                    Endpoint: "fake://test",
+                    Duration: TimeSpan.FromMilliseconds(10),
+                    HttpStatus: 200,
+                    NormalizedError: null,
+                    Retryable: null,
+                    CorrelationId: "corr-support-report"),
+                DateTimeOffset.UtcNow),
+            CancellationToken.None);
+
+        var report = await adminStore.GetJobSupportReportAsync(
+            enqueued.JobId,
+            PdfStampRecognitionConstants.ProcessorKey,
+            CancellationToken.None);
+
+        Assert.NotNull(report);
+        Assert.NotNull(report.Result);
+        Assert.Equal(saved.ResultIndexId, report.Result.ResultIndexId);
+        Assert.Equal("json", report.Result.ResultKind);
+        Assert.Equal("pdf_stamp_recognition_results", report.Result.PayloadTable);
+        Assert.True(report.Result.PayloadSize > 0);
+        Assert.Equal(PdfStampRecognitionConstants.ProcessorKey, report.ProcessorKey);
+        Assert.Single(report.Attempts);
+    }
+
+    [Fact]
     public async Task Deferred_job_returns_to_queue_and_is_not_claimed_before_schedule()
     {
         var connectionString = IntegrationTestDatabase.TryReadConnectionString();

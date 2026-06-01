@@ -331,6 +331,56 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task Admin_job_support_report_returns_sanitized_context()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var admin = await CreateAdminClientAsync(_factory);
+        var blocked = await CreateBlockedProcessingJobAsync();
+        using var retryRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/admin/jobs/{blocked.JobId:N}/retry");
+        retryRequest.Headers.Add("X-CSRF-Token", admin.CsrfToken);
+        retryRequest.Content = JsonContent.Create(new { Comment = "retry from support report test" });
+
+        var retry = await admin.Client.SendAsync(retryRequest);
+        var report = await admin.Client.GetAsync($"/api/admin/jobs/{blocked.JobId:N}/support-report");
+
+        Assert.Equal(HttpStatusCode.Accepted, retry.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, report.StatusCode);
+
+        var body = await report.Content.ReadAsStringAsync();
+        var payload = JsonSerializer.Deserialize<JsonElement>(body);
+
+        Assert.Equal(blocked.JobId.ToString("N"), payload.GetProperty("jobId").GetString());
+        Assert.Equal(blocked.Hash, payload.GetProperty("hash").GetString());
+        Assert.Equal("pdf-stamp-recognition", payload.GetProperty("capability").GetString());
+        Assert.Equal("pdf2txt-http-recognizer", payload.GetProperty("processorKey").GetString());
+        Assert.Equal("blocked", payload.GetProperty("status").GetString());
+        Assert.Equal("Unexpected response.", payload.GetProperty("diagnostics").GetProperty("excerpt").GetString());
+        Assert.False(payload.TryGetProperty("temporaryFileKey", out _));
+        Assert.False(body.Contains("temp/", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(JsonValueKind.Null, payload.GetProperty("result").ValueKind);
+
+        var attempts = payload.GetProperty("attempts").EnumerateArray().ToArray();
+        Assert.Equal(2, attempts.Length);
+        Assert.Equal(1, attempts[0].GetProperty("attemptNumber").GetInt32());
+        Assert.Equal(2, attempts[1].GetProperty("attemptNumber").GetInt32());
+
+        var processor = payload.GetProperty("processor");
+        Assert.Equal("pdf2txt-http-recognizer", processor.GetProperty("processorKey").GetString());
+        Assert.True(processor.TryGetProperty("queue", out _));
+        Assert.True(processor.TryGetProperty("workers", out _));
+        Assert.True(processor.TryGetProperty("recentDiagnostics", out _));
+
+        var auditEvents = payload.GetProperty("auditEvents").EnumerateArray().ToArray();
+        Assert.Single(auditEvents);
+        Assert.Equal("manual_retry_job", auditEvents[0].GetProperty("action").GetString());
+        Assert.Equal(blocked.JobId.ToString("N"), auditEvents[0].GetProperty("targetId").GetString());
+    }
+
+    [Fact]
     public async Task Admin_manual_retry_requires_csrf_and_creates_new_queued_attempt()
     {
         if (!HasConfiguredTestDatabase())
