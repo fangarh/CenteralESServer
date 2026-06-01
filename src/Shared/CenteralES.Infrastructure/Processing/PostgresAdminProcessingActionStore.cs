@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CenteralES.Admin;
+using CenteralES.Processing;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -27,13 +28,13 @@ public sealed class PostgresAdminProcessingActionStore : IAdminProcessingActionS
         if (job is null)
         {
             await transaction.CommitAsync(cancellationToken);
-            return AdminManualRetryJobResult.NotFound();
+            return new AdminManualRetryJobNotFound();
         }
 
         if (!CanManualRetry(job))
         {
             await transaction.CommitAsync(cancellationToken);
-            return AdminManualRetryJobResult.Conflict(command.SourceJobId);
+            return new AdminManualRetryJobConflict(command.SourceJobId);
         }
 
         var newJobId = Guid.NewGuid();
@@ -69,11 +70,12 @@ public sealed class PostgresAdminProcessingActionStore : IAdminProcessingActionS
 
         await transaction.CommitAsync(cancellationToken);
 
-        return AdminManualRetryJobResult.Success(
+        return new AdminManualRetryJobSuccess(
             command.SourceJobId,
             newJobId,
             job.ContentHash,
             attemptNumber,
+            ProcessingJobStatus.Queued,
             auditId);
     }
 

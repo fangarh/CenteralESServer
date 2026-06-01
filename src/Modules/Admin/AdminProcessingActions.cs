@@ -11,49 +11,19 @@ public sealed record AdminManualRetryJobCommand(
     string? IpAddress,
     string? UserAgent);
 
-public sealed record AdminManualRetryJobResult(
-    AdminManualRetryJobStatus Status,
-    Guid? SourceJobId = null,
-    Guid? NewJobId = null,
-    string? ContentHash = null,
-    int? AttemptNumber = null,
-    ProcessingJobStatus? NewStatus = null,
-    Guid? AuditId = null)
-{
-    public static AdminManualRetryJobResult Success(
-        Guid sourceJobId,
-        Guid newJobId,
-        string contentHash,
-        int attemptNumber,
-        Guid auditId)
-    {
-        return new AdminManualRetryJobResult(
-            AdminManualRetryJobStatus.Success,
-            sourceJobId,
-            newJobId,
-            contentHash,
-            attemptNumber,
-            ProcessingJobStatus.Queued,
-            auditId);
-    }
+public abstract record AdminManualRetryJobResult;
 
-    public static AdminManualRetryJobResult NotFound()
-    {
-        return new AdminManualRetryJobResult(AdminManualRetryJobStatus.NotFound);
-    }
+public sealed record AdminManualRetryJobSuccess(
+    Guid SourceJobId,
+    Guid NewJobId,
+    string ContentHash,
+    int AttemptNumber,
+    ProcessingJobStatus NewStatus,
+    Guid AuditId) : AdminManualRetryJobResult;
 
-    public static AdminManualRetryJobResult Conflict(Guid sourceJobId)
-    {
-        return new AdminManualRetryJobResult(AdminManualRetryJobStatus.Conflict, sourceJobId);
-    }
-}
+public sealed record AdminManualRetryJobNotFound : AdminManualRetryJobResult;
 
-public enum AdminManualRetryJobStatus
-{
-    Success,
-    NotFound,
-    Conflict
-}
+public sealed record AdminManualRetryJobConflict(Guid SourceJobId) : AdminManualRetryJobResult;
 
 public interface IAdminProcessingActionStore
 {

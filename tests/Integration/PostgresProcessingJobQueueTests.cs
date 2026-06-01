@@ -388,21 +388,21 @@ public sealed class PostgresProcessingJobQueueTests
                 "integration-test"),
             CancellationToken.None);
 
+        var success = Assert.IsType<AdminManualRetryJobSuccess>(retry);
         var current = await queue.GetCurrentByHashAsync(PdfStampRecognitionConstants.Capability, command.ContentHash, CancellationToken.None);
         var retryClaim = await queue.ClaimNextAsync(now.AddSeconds(4), CancellationToken.None);
-        var audit = await ReadAuditEventAsync(dataSource, retry.AuditId!.Value, CancellationToken.None);
+        var audit = await ReadAuditEventAsync(dataSource, success.AuditId, CancellationToken.None);
 
-        Assert.Equal(AdminManualRetryJobStatus.Success, retry.Status);
         Assert.NotNull(current);
-        Assert.Equal(retry.NewJobId, current.JobId);
+        Assert.Equal(success.NewJobId, current.JobId);
         Assert.Equal(2, current.AttemptNumber);
         Assert.Equal(ProcessingJobStatus.Queued, current.Status);
         Assert.NotNull(retryClaim);
-        Assert.Equal(retry.NewJobId, retryClaim.JobId);
+        Assert.Equal(success.NewJobId, retryClaim.JobId);
         Assert.Equal(claimed.TemporaryFileKey, retryClaim.TemporaryFileKey);
         Assert.Equal(AdminAuditActions.ManualRetryJob, audit.Action);
         Assert.Equal(enqueued.JobId.ToString("N"), audit.TargetId);
-        Assert.Contains(retry.NewJobId!.Value.ToString("N"), audit.NewValueJson, StringComparison.Ordinal);
+        Assert.Contains(success.NewJobId.ToString("N"), audit.NewValueJson, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -443,7 +443,7 @@ public sealed class PostgresProcessingJobQueueTests
                 null),
             CancellationToken.None);
 
-        Assert.Equal(AdminManualRetryJobStatus.Conflict, retry.Status);
+        Assert.IsType<AdminManualRetryJobConflict>(retry);
     }
 
     [Fact]

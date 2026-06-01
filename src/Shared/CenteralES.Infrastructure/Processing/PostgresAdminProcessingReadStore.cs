@@ -46,7 +46,7 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
             limit @limit;
             """, connection);
         command.Parameters.AddWithValue("capability", (object?)query.Capability ?? DBNull.Value);
-        command.Parameters.AddWithValue("status", (object?)ToDatabaseStatus(query.Status) ?? DBNull.Value);
+        command.Parameters.AddWithValue("status", (object?)query.Status?.ToDatabaseValue() ?? DBNull.Value);
         command.Parameters.AddWithValue("content_hash", (object?)query.ContentHash ?? DBNull.Value);
         command.Parameters.AddWithValue("limit", limit);
 
@@ -60,7 +60,7 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
                 reader.GetString(2),
                 reader.GetString(3),
                 reader.GetInt32(4),
-                ParseStatus(reader.GetString(5)),
+                ProcessingJobStatusMapper.Parse(reader.GetString(5)),
                 reader.GetFieldValue<DateTimeOffset>(6),
                 reader.IsDBNull(7) ? null : reader.GetFieldValue<DateTimeOffset>(7),
                 reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8),
@@ -117,7 +117,7 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
             reader.GetString(3),
             reader.GetString(4),
             reader.GetInt32(5),
-            ParseStatus(reader.GetString(6)),
+            ProcessingJobStatusMapper.Parse(reader.GetString(6)),
             reader.GetFieldValue<DateTimeOffset>(7),
             reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8),
             reader.IsDBNull(9) ? null : reader.GetFieldValue<DateTimeOffset>(9),
@@ -327,7 +327,7 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
             diagnostics.Add(new AdminProcessorRecentDiagnostic(
                 reader.GetGuid(0),
                 reader.GetInt32(1),
-                ParseStatus(reader.GetString(2)),
+                ProcessingJobStatusMapper.Parse(reader.GetString(2)),
                 reader.IsDBNull(3) ? null : reader.GetString(3),
                 reader.IsDBNull(4) ? null : reader.GetInt32(4),
                 reader.IsDBNull(5) ? null : Enum.Parse<NormalizedProcessorError>(reader.GetString(5)),
@@ -457,7 +457,7 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
             attempts.Add(new AdminProcessingAttemptDetails(
                 reader.GetGuid(0),
                 reader.GetInt32(1),
-                ParseStatus(reader.GetString(2)),
+                ProcessingJobStatusMapper.Parse(reader.GetString(2)),
                 reader.GetFieldValue<DateTimeOffset>(3),
                 reader.IsDBNull(4) ? null : reader.GetFieldValue<DateTimeOffset>(4),
                 reader.IsDBNull(5) ? null : reader.GetFieldValue<DateTimeOffset>(5),
@@ -487,33 +487,4 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
             : string.Concat(normalized.AsSpan(0, maxLength), "...");
     }
 
-    private static string? ToDatabaseStatus(ProcessingJobStatus? status)
-    {
-        return status is null
-            ? null
-            : status.Value switch
-            {
-                ProcessingJobStatus.Queued => "queued",
-                ProcessingJobStatus.Processing => "processing",
-                ProcessingJobStatus.Completed => "completed",
-                ProcessingJobStatus.Failed => "failed",
-                ProcessingJobStatus.Blocked => "blocked",
-                ProcessingJobStatus.Cancelled => "cancelled",
-                _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown processing job status.")
-            };
-    }
-
-    private static ProcessingJobStatus ParseStatus(string status)
-    {
-        return status switch
-        {
-            "queued" => ProcessingJobStatus.Queued,
-            "processing" => ProcessingJobStatus.Processing,
-            "completed" => ProcessingJobStatus.Completed,
-            "failed" => ProcessingJobStatus.Failed,
-            "blocked" => ProcessingJobStatus.Blocked,
-            "cancelled" => ProcessingJobStatus.Cancelled,
-            _ => throw new InvalidOperationException($"Unknown job status '{status}'.")
-        };
-    }
 }

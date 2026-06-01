@@ -29,7 +29,7 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
                 existing.SubjectId,
                 existing.CurrentJobId!.Value,
                 existing.CurrentAttemptNumber!.Value,
-                ParseStatus(existing.CurrentJobStatus!),
+                ProcessingJobStatusMapper.Parse(existing.CurrentJobStatus!),
                 Deduplicated: true);
         }
 
@@ -492,20 +492,6 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         return status is "queued" or "processing";
     }
 
-    private static ProcessingJobStatus ParseStatus(string status)
-    {
-        return status switch
-        {
-            "queued" => ProcessingJobStatus.Queued,
-            "processing" => ProcessingJobStatus.Processing,
-            "completed" => ProcessingJobStatus.Completed,
-            "failed" => ProcessingJobStatus.Failed,
-            "blocked" => ProcessingJobStatus.Blocked,
-            "cancelled" => ProcessingJobStatus.Cancelled,
-            _ => throw new InvalidOperationException($"Unknown job status '{status}'.")
-        };
-    }
-
     private static async Task<ProcessingJobSnapshot?> ReadSnapshotAsync(NpgsqlDataReader reader, CancellationToken cancellationToken)
     {
         if (!await reader.ReadAsync(cancellationToken))
@@ -520,7 +506,7 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
             reader.GetString(3),
             reader.GetString(4),
             reader.GetInt32(5),
-            ParseStatus(reader.GetString(6)),
+            ProcessingJobStatusMapper.Parse(reader.GetString(6)),
             reader.GetFieldValue<DateTimeOffset>(7),
             reader.IsDBNull(8) ? null : reader.GetFieldValue<DateTimeOffset>(8),
             ReadDiagnostics(reader));
