@@ -1,0 +1,57 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-06-01T16:45:29+03:00",
+  "context": "phase",
+  "phase": "2",
+  "phase_name": "Security, Retry, Health, Admin Actions",
+  "phase_dir": ".planning/phases/001-walking-skeleton-pdf-processing",
+  "status": "paused_for_context_cleanup",
+  "last_commit": {
+    "hash": "516d691",
+    "subject": "Add temporary storage hard limit guard"
+  },
+  "completed_checkpoints": [
+    {
+      "name": "Phase 1 PDF processing backend slice",
+      "commit": "7f786f1"
+    },
+    {
+      "name": "Public API key authentication",
+      "commit": "7c3d17d"
+    },
+    {
+      "name": "Admin session authentication baseline",
+      "commit": "b3ef92d"
+    },
+    {
+      "name": "Admin manual retry audit baseline",
+      "commit": "ec12f6d"
+    },
+    {
+      "name": "Temporary storage hard limit guard",
+      "commit": "516d691"
+    }
+  ],
+  "remaining_work": [
+    "Support report MVP for Job Details",
+    "Broader audit coverage and read API for Admin UI",
+    "Docker Compose delivery MVP",
+    "First admin init command",
+    "Admin UI completion"
+  ],
+  "verification": {
+    "build": "passed with known MSB3101 obj cache warnings",
+    "tests": "unit 40/40, integration 22/22",
+    "smoke": "passed with fake-pdf2txt",
+    "dotnet_processes_after_smoke": "none"
+  },
+  "critical_rules": [
+    "Never print db.env secrets",
+    "Keep db.env and test.pdf ignored",
+    "No Entity Framework",
+    "Use explicit SQL/Npgsql",
+    "Admin state-changing endpoints require session cookie and X-CSRF-Token",
+    "Do not include raw secrets, input PDF files, or large payloads in diagnostics/audit/support report"
+  ],
+  "next_action": "Implement Support Report MVP for Admin Job Details, or ask user to choose between support report and audit read API."
+}
