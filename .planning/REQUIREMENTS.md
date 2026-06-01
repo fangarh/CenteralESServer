@@ -45,7 +45,7 @@
 - [x] **STORE-01**: Входные PDF хранятся временно и удаляются после terminal state.
 - [x] **STORE-02**: Result index хранит lightweight ссылку на payload.
 - [x] **STORE-03**: PDF result payload хранится в result store подсистемы.
-- [ ] **STORE-04**: Temporary storage hard limit блокирует новые upload-ы с `503 temporary_storage_full`.
+- [x] **STORE-04**: Temporary storage hard limit блокирует новые upload-ы с `503 temporary_storage_full`.
 
 ### Admin and Operations
 
@@ -106,7 +106,7 @@
 | STORE-01 | Phase 1 | Done |
 | STORE-02 | Phase 1 | Done |
 | STORE-03 | Phase 1 | Done |
-| STORE-04 | Phase 2 | Pending |
+| STORE-04 | Phase 2 | Done |
 | ADMIN-01 | Phase 1 | Partial: Admin API done, UI pending |
 | ADMIN-02 | Phase 2 | Done: Backend endpoint, UI pending |
 | ADMIN-03 | Phase 2 | Partial: manual retry audit done |
@@ -122,4 +122,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-01 after manual retry/audit checkpoint*
+*Last updated: 2026-06-01 after temporary storage hard-limit checkpoint*

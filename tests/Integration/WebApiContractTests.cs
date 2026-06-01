@@ -167,6 +167,45 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task Create_pdf_job_returns_503_when_temporary_storage_hard_limit_is_exceeded()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var previousHardLimit = Environment.GetEnvironmentVariable("Storage__TemporaryHardLimitBytes");
+        var previousTemporaryRoot = Environment.GetEnvironmentVariable("Storage__TemporaryRoot");
+        var temporaryRoot = Path.Combine(Path.GetTempPath(), $"centerales-hard-limit-it-{Guid.NewGuid():N}");
+        Environment.SetEnvironmentVariable("Storage__TemporaryHardLimitBytes", "10");
+        Environment.SetEnvironmentVariable("Storage__TemporaryRoot", temporaryRoot);
+
+        try
+        {
+            using var factory = new WebApplicationFactory<Program>();
+            var client = await CreateAuthorizedClientAsync(factory);
+            using var content = new MultipartFormDataContent();
+            using var file = new ByteArrayContent(Encoding.UTF8.GetBytes("%PDF-1.7 temporary storage hard limit"));
+            content.Add(file, "file", "storage-full.pdf");
+
+            var response = await client.PostAsync("/api/pdf-stamp-recognition/jobs", content);
+            var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            Assert.Equal("temporary_storage_full", payload.GetProperty("error").GetProperty("code").GetString());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("Storage__TemporaryHardLimitBytes", previousHardLimit);
+            Environment.SetEnvironmentVariable("Storage__TemporaryRoot", previousTemporaryRoot);
+            if (Directory.Exists(temporaryRoot))
+            {
+                Directory.Delete(temporaryRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task Active_pdf_job_can_be_observed_by_hash_and_job_id()
     {
         if (!HasConfiguredTestDatabase())

@@ -43,7 +43,7 @@ Scope:
 - manual retry одной задачи; backend endpoint implemented, UI remains Phase 4;
 - audit для admin actions; manual retry audit implemented, remaining dangerous actions later in Phase 2/4;
 - health live/ready и Worker heartbeat; baseline already implemented in Phase 1, remaining work is hardening/admin visibility;
-- temporary storage hard/soft limit behavior;
+- temporary storage hard/soft limit behavior; backend hard-limit block implemented, Admin UI warning remains Phase 4;
 - blocked/final failure handling;
 - support report MVP.
 
@@ -94,4 +94,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-01 after manual retry/audit checkpoint*
+*Last updated: 2026-06-01 after temporary storage hard-limit checkpoint*

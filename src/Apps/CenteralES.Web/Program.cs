@@ -18,6 +18,7 @@ builder.Services.AddOpenApi();
 
 var processingDatabaseConnectionString = ResolveProcessingDatabaseConnectionString(builder.Configuration, builder.Environment.ContentRootPath);
 var temporaryStorageRoot = ResolveTemporaryStorageRoot(builder.Configuration);
+var temporaryStorageLimits = ResolveTemporaryStorageLimits(builder.Configuration);
 var pdfMaxUploadBytes = ResolvePdfMaxUploadBytes(builder.Configuration);
 var databaseBootstrapper = new PostgresDatabaseBootstrapper();
 await databaseBootstrapper.EnsureDatabaseAsync(processingDatabaseConnectionString, CancellationToken.None);
@@ -28,6 +29,7 @@ builder.Services.AddSingleton<IAdminAuthenticator, PostgresAdminAuthenticator>()
 builder.Services.AddSingleton<IProcessingJobQueue, PostgresProcessingJobQueue>();
 builder.Services.AddSingleton<IPdfStampRecognitionResultStore, PostgresPdfStampRecognitionResultStore>();
 builder.Services.AddSingleton<ITemporaryFileStore>(_ => new LocalTemporaryFileStore(temporaryStorageRoot));
+builder.Services.AddSingleton<ITemporaryStorageMonitor>(_ => new LocalTemporaryStorageMonitor(temporaryStorageRoot, temporaryStorageLimits));
 builder.Services.AddSingleton<IAdminProcessingReadStore, PostgresAdminProcessingReadStore>();
 builder.Services.AddSingleton<IAdminProcessingActionStore, PostgresAdminProcessingActionStore>();
 
@@ -49,6 +51,7 @@ app.MapGet("/health/live", () =>
 app.MapGet("/health/ready", async (
     NpgsqlDataSource dataSource,
     ITemporaryFileStore temporaryFileStore,
+    ITemporaryStorageMonitor temporaryStorageMonitor,
     CancellationToken cancellationToken) =>
 {
     var checkedAt = DateTimeOffset.UtcNow;
@@ -56,7 +59,7 @@ app.MapGet("/health/ready", async (
     {
         await CheckPostgresAsync(dataSource, cancellationToken),
         await CheckProcessingSchemaAsync(dataSource, cancellationToken),
-        await CheckTemporaryStorageAsync(temporaryFileStore, cancellationToken)
+        await CheckTemporaryStorageAsync(temporaryFileStore, temporaryStorageMonitor, cancellationToken)
     };
     var status = checks.All(check => string.Equals(check.Status, "healthy", StringComparison.Ordinal))
         ? "healthy"
@@ -76,6 +79,7 @@ app.MapPost("/api/pdf-stamp-recognition/jobs", async (
     IProcessingJobQueue queue,
     IPdfStampRecognitionResultStore resultStore,
     ITemporaryFileStore temporaryFileStore,
+    ITemporaryStorageMonitor temporaryStorageMonitor,
     CancellationToken cancellationToken) =>
 {
     var authorization = await AuthorizePublicApiAsync(
@@ -118,6 +122,16 @@ app.MapPost("/api/pdf-stamp-recognition/jobs", async (
     }
 
     var temporaryFileKey = $"incoming/{hash.Replace("sha256:", string.Empty, StringComparison.Ordinal)}.pdf";
+    var capacity = await temporaryStorageMonitor.CheckCapacityAsync(
+        new TemporaryStorageCapacityRequest(file.Length),
+        cancellationToken);
+    if (capacity.Status is TemporaryStorageCapacityStatus.Full)
+    {
+        return Results.Json(
+            ApiErrorResponse.Create("temporary_storage_full", "Temporary storage is full. Try again after cleanup frees space."),
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
     await using (var saveStream = file.OpenReadStream())
     {
         await temporaryFileStore.SaveAsync(temporaryFileKey, saveStream, cancellationToken);
@@ -476,6 +490,32 @@ static string ResolveTemporaryStorageRoot(IConfiguration configuration)
     return Path.Combine(Path.GetTempPath(), "centerales-server", "temporary-files");
 }
 
+static TemporaryStorageLimits ResolveTemporaryStorageLimits(IConfiguration configuration)
+{
+    var limits = new TemporaryStorageLimits(
+        HardLimitBytes: ResolveOptionalPositiveLong(configuration, "Storage:TemporaryHardLimitBytes"),
+        SoftLimitBytes: ResolveOptionalPositiveLong(configuration, "Storage:TemporarySoftLimitBytes"),
+        MinimumFreeBytes: ResolveOptionalPositiveLong(configuration, "Storage:TemporaryMinimumFreeBytes"));
+    limits.Validate();
+    return limits;
+}
+
+static long? ResolveOptionalPositiveLong(IConfiguration configuration, string key)
+{
+    var configured = configuration[key];
+    if (string.IsNullOrWhiteSpace(configured))
+    {
+        return null;
+    }
+
+    if (!long.TryParse(configured, out var value) || value <= 0)
+    {
+        throw new InvalidOperationException($"Configuration value {key} must be a positive integer.");
+    }
+
+    return value;
+}
+
 static long ResolvePdfMaxUploadBytes(IConfiguration configuration)
 {
     const long defaultMaxUploadBytes = 250L * 1024 * 1024;
@@ -550,6 +590,7 @@ static async Task<HealthCheckItemResponse> CheckProcessingSchemaAsync(
 
 static async Task<HealthCheckItemResponse> CheckTemporaryStorageAsync(
     ITemporaryFileStore temporaryFileStore,
+    ITemporaryStorageMonitor temporaryStorageMonitor,
     CancellationToken cancellationToken)
 {
     var key = $".health/ready-{Guid.NewGuid():N}.tmp";
@@ -564,7 +605,13 @@ static async Task<HealthCheckItemResponse> CheckTemporaryStorageAsync(
         }
 
         await temporaryFileStore.DeleteIfExistsAsync(key, cancellationToken);
-        return new HealthCheckItemResponse("temporaryStorage", "healthy");
+        var capacity = await temporaryStorageMonitor.CheckCapacityAsync(
+            new TemporaryStorageCapacityRequest(0),
+            cancellationToken);
+
+        return new HealthCheckItemResponse(
+            "temporaryStorage",
+            capacity.Status is TemporaryStorageCapacityStatus.Full ? "unhealthy" : "healthy");
     }
     catch (Exception ex) when (ex is not OperationCanceledException)
     {

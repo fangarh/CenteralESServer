@@ -36,7 +36,7 @@ Phase 2: Security, Retry, Health, Admin Actions
 Plan:
 
 ```text
-Continue Phase 2 after manual retry/audit with temporary storage hard/soft limit behavior, broader audit coverage, and support report/remaining admin actions.
+Continue Phase 2 after temporary storage hard-limit with broader audit coverage, support report, and remaining admin actions.
 ```
 
 ## Current Open External Facts
@@ -83,6 +83,7 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - 2026-06-01: Public API key auth baseline added: `client_applications` table, PBKDF2 secret hashes, PostgreSQL authenticator, `Authorization: ApiKey <keyId>.<secret>` enforcement on Public API endpoints, 401/403 contract tests, and local smoke with seeded API key.
 - 2026-06-01: Admin login/session/CSRF backend baseline added: `admin_users` and `admin_sessions` tables, PBKDF2 admin password hashes, hashed session/CSRF tokens, `POST /api/admin/auth/login`, `GET /api/admin/auth/me`, `POST /api/admin/auth/logout`, session protection for read-only Admin API, and CSRF enforcement for logout.
 - 2026-06-01: Manual retry backend baseline added: `POST /api/admin/jobs/{jobId}/retry` requires admin session + CSRF, creates a new queued attempt for the current failed/blocked job, updates current subject state, and writes append-only `manual_retry_job` audit event in `admin_audit_events`.
+- 2026-06-01: Temporary storage capacity baseline added: `LocalTemporaryStorageMonitor`, config keys `Storage:TemporarySoftLimitBytes`, `Storage:TemporaryHardLimitBytes`, `Storage:TemporaryMinimumFreeBytes`, readiness storage capacity check, and `503 temporary_storage_full` on Public PDF upload when the hard/min-free limit is exceeded.
 
 ## Workflow Rules
 
@@ -92,4 +93,4 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-06-01 after manual retry/audit checkpoint*
+*Last updated: 2026-06-01 after temporary storage hard-limit checkpoint*

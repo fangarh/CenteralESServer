@@ -105,6 +105,18 @@ hard limit: 90%
 minimum free space: 10 GiB
 ```
 
+Текущий backend skeleton поддерживает byte-based limits через конфигурацию:
+
+```text
+Storage:TemporarySoftLimitBytes
+Storage:TemporaryHardLimitBytes
+Storage:TemporaryMinimumFreeBytes
+```
+
+Если `TemporaryHardLimitBytes` задан и текущий размер temporary storage плюс входящий файл превышает лимит, `POST /api/pdf-stamp-recognition/jobs` возвращает `503 temporary_storage_full` до сохранения файла. Если `TemporaryMinimumFreeBytes` задан, upload также блокируется, когда после входящего файла свободного места будет меньше настроенного минимума.
+
+`TemporarySoftLimitBytes` сейчас влияет на capacity status как warning; UI-предупреждение остаётся частью Admin Storage/Health screen.
+
 Поведение:
 
 - при soft limit админка показывает предупреждение;
