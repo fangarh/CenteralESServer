@@ -110,7 +110,7 @@
 | STORE-04 | Phase 2 | Done |
 | ADMIN-01 | Phase 1 | Partial: Admin API done, UI pending |
 | ADMIN-02 | Phase 2 | Done: Backend endpoint, UI pending |
-| ADMIN-03 | Phase 2 | Partial: manual retry/API key audit and audit read API done |
+| ADMIN-03 | Phase 2 | Partial: manual retry/API key/admin user audit and audit read API done |
 | ADMIN-04 | Phase 2 | Done: Backend support report endpoint, UI/export button pending |
 | HEALTH-01 | Phase 2 | Done |
 | HEALTH-02 | Phase 2 | Done |
@@ -124,4 +124,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-02 after Admin API key management checkpoint*
+*Last updated: 2026-06-02 after Admin user management checkpoint*

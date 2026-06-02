@@ -263,4 +263,47 @@ internal static class ApiMappings
             principal.Login,
             principal.Role);
     }
+
+    public static AdminManagedUserResponse ToAdminManagedUserResponse(AdminUserListItem user)
+    {
+        return new AdminManagedUserResponse(
+            user.UserId.ToString("N"),
+            user.Login,
+            user.Role,
+            user.IsActive,
+            user.CreatedAt,
+            user.UpdatedAt,
+            user.LastLoginAt,
+            user.DisabledAt);
+    }
+
+    public static AdminCreateUserResponse ToAdminCreateUserResponse(AdminCreateUserSuccess success)
+    {
+        return new AdminCreateUserResponse(
+            success.User.UserId.ToString("N"),
+            success.User.Login,
+            success.User.Role,
+            success.User.IsActive,
+            success.User.CreatedAt,
+            success.AuditId.ToString("N"));
+    }
+
+    public static AdminDisableUserResponse ToAdminDisableUserResponse(AdminDisableUserSuccess success)
+    {
+        return new AdminDisableUserResponse(
+            success.User.UserId.ToString("N"),
+            success.User.Login,
+            success.User.Role,
+            success.User.IsActive,
+            success.User.DisabledAt,
+            success.AuditId.ToString("N"));
+    }
+
+    public static AdminChangeUserPasswordResponse ToAdminChangeUserPasswordResponse(AdminChangeUserPasswordSuccess success)
+    {
+        return new AdminChangeUserPasswordResponse(
+            success.User.UserId.ToString("N"),
+            success.User.Login,
+            success.AuditId.ToString("N"));
+    }
 }

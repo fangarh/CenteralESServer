@@ -54,6 +54,50 @@ internal sealed record AdminUserResponse(
     string Login,
     string Role);
 
+internal sealed record AdminUserListResponse(IReadOnlyList<AdminManagedUserResponse> Users);
+
+internal sealed record AdminManagedUserResponse(
+    string UserId,
+    string Login,
+    string Role,
+    bool IsActive,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? LastLoginAt,
+    DateTimeOffset? DisabledAt);
+
+internal sealed record AdminCreateUserRequestBody(
+    string? Login,
+    string? Password,
+    string? Comment);
+
+internal sealed record AdminCreateUserResponse(
+    string UserId,
+    string Login,
+    string Role,
+    bool IsActive,
+    DateTimeOffset CreatedAt,
+    string AuditId);
+
+internal sealed record AdminDisableUserRequestBody(string? Comment);
+
+internal sealed record AdminDisableUserResponse(
+    string UserId,
+    string Login,
+    string Role,
+    bool IsActive,
+    DateTimeOffset? DisabledAt,
+    string AuditId);
+
+internal sealed record AdminChangeUserPasswordRequestBody(
+    string? Password,
+    string? Comment);
+
+internal sealed record AdminChangeUserPasswordResponse(
+    string UserId,
+    string Login,
+    string AuditId);
+
 internal sealed record AdminAuthorizationResult(IResult? Error, CenteralES.AccessControl.AdminPrincipal? Principal);
 
 internal sealed record AdminManualRetryRequestBody(string? Comment);

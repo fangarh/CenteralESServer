@@ -498,6 +498,128 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task Admin_users_can_be_created_listed_password_changed_disabled_and_audited()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var admin = await CreateAdminClientAsync(_factory);
+        var login = $"managed_{Guid.NewGuid():N}";
+        var password = $"Managed_password_{Guid.NewGuid():N}";
+        var nextPassword = $"Managed_next_{Guid.NewGuid():N}";
+
+        var createWithoutCsrf = await admin.Client.PostAsJsonAsync(
+            "/api/admin/users",
+            new
+            {
+                Login = login,
+                Password = password
+            });
+
+        using var createRequest = new HttpRequestMessage(HttpMethod.Post, "/api/admin/users");
+        createRequest.Headers.Add("X-CSRF-Token", admin.CsrfToken);
+        createRequest.Content = JsonContent.Create(new
+        {
+            Login = login,
+            Password = password
+        });
+        var create = await admin.Client.SendAsync(createRequest);
+
+        Assert.Equal(HttpStatusCode.Forbidden, createWithoutCsrf.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+
+        var created = await create.Content.ReadFromJsonAsync<JsonElement>();
+        var userId = created.GetProperty("userId").GetString();
+        Assert.Equal(login, created.GetProperty("login").GetString());
+        Assert.Equal("admin", created.GetProperty("role").GetString());
+        Assert.True(created.GetProperty("isActive").GetBoolean());
+        Assert.False(created.TryGetProperty("password", out _));
+        Assert.False(created.TryGetProperty("passwordHash", out _));
+
+        var list = await admin.Client.GetAsync($"/api/admin/users?login={Uri.EscapeDataString(login)}");
+        var listPayload = await list.Content.ReadFromJsonAsync<JsonElement>();
+        var users = listPayload.GetProperty("users").EnumerateArray().ToArray();
+
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        Assert.Single(users);
+        Assert.Equal(userId, users[0].GetProperty("userId").GetString());
+        Assert.Equal(login, users[0].GetProperty("login").GetString());
+        Assert.False(users[0].TryGetProperty("password", out _));
+        Assert.False(users[0].TryGetProperty("passwordHash", out _));
+
+        using var createdAdminClient = _factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        var createdLogin = await createdAdminClient.PostAsJsonAsync(
+            "/api/admin/auth/login",
+            new
+            {
+                Login = login,
+                Password = password
+            });
+
+        using var passwordRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/admin/users/{userId}/password");
+        passwordRequest.Headers.Add("X-CSRF-Token", admin.CsrfToken);
+        passwordRequest.Content = JsonContent.Create(new
+        {
+            Password = nextPassword,
+            Comment = "password change from integration test"
+        });
+        var passwordChange = await admin.Client.SendAsync(passwordRequest);
+
+        var oldPasswordLogin = await createdAdminClient.PostAsJsonAsync(
+            "/api/admin/auth/login",
+            new
+            {
+                Login = login,
+                Password = password
+            });
+        var nextPasswordLogin = await createdAdminClient.PostAsJsonAsync(
+            "/api/admin/auth/login",
+            new
+            {
+                Login = login,
+                Password = nextPassword
+            });
+
+        using var disableRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/admin/users/{userId}/disable");
+        disableRequest.Headers.Add("X-CSRF-Token", admin.CsrfToken);
+        disableRequest.Content = JsonContent.Create(new { Comment = "disable admin from integration test" });
+        var disable = await admin.Client.SendAsync(disableRequest);
+
+        var disabledLogin = await createdAdminClient.PostAsJsonAsync(
+            "/api/admin/auth/login",
+            new
+            {
+                Login = login,
+                Password = nextPassword
+            });
+
+        var audit = await admin.Client.GetAsync($"/api/admin/audit?targetType=admin_user&targetId={userId}&limit=10");
+        var auditBody = await audit.Content.ReadAsStringAsync();
+        var auditPayload = JsonSerializer.Deserialize<JsonElement>(auditBody);
+        var auditEvents = auditPayload.GetProperty("events").EnumerateArray().ToArray();
+
+        Assert.Equal(HttpStatusCode.OK, createdLogin.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, passwordChange.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, oldPasswordLogin.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, nextPasswordLogin.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, disable.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, disabledLogin.StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, audit.StatusCode);
+        Assert.Contains(auditEvents, item => item.GetProperty("action").GetString() == "create_admin_user");
+        Assert.Contains(auditEvents, item => item.GetProperty("action").GetString() == "change_admin_password");
+        Assert.Contains(auditEvents, item => item.GetProperty("action").GetString() == "disable_admin_user");
+        Assert.DoesNotContain(password, auditBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(nextPassword, auditBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("password_hash", auditBody, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Admin_manual_retry_requires_csrf_and_creates_new_queued_attempt()
     {
         if (!HasConfiguredTestDatabase())
