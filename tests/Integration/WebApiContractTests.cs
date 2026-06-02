@@ -67,6 +67,24 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task Admin_ui_contains_job_details_surface()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = _factory.CreateClient();
+        var html = await client.GetStringAsync("/admin");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-3");
+
+        Assert.Contains("job-details-panel", html, StringComparison.Ordinal);
+        Assert.Contains("support-report-button", html, StringComparison.Ordinal);
+        Assert.Contains("loadJobDetails", js, StringComparison.Ordinal);
+        Assert.Contains("/support-report", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Live_health_returns_healthy_status()
     {
         if (!HasConfiguredTestDatabase())

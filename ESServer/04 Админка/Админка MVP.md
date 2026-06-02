@@ -275,6 +275,14 @@ POST /api/admin/jobs/{jobId}/retry
 
 Endpoint требует admin session cookie и `X-CSRF-Token`, создаёт новую queued attempt для текущей failed/blocked job и пишет audit event.
 
+Текущий UI checkpoint:
+
+```text
+/admin -> Jobs -> Детали
+```
+
+Job Details в первом UI shell показывает идентификаторы, timestamps, diagnostics, цепочку attempts, кнопку retry для failed/blocked задачи и скачивание support report JSON.
+
 Массовый retry запускается из списка задач после фильтрации, например:
 
 ```text

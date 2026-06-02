@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Centeral ES Admin</title>
-  <link rel="stylesheet" href="/admin/app.css?v=20260602-2">
+  <link rel="stylesheet" href="/admin/app.css?v=20260602-3">
 </head>
 <body>
   <div class="app-shell">
@@ -111,6 +111,48 @@
                 <tbody id="jobs-body"></tbody>
               </table>
             </div>
+            <section id="job-details-panel" class="details-panel" hidden>
+              <div class="section-header">
+                <div>
+                  <h2 id="job-details-title">Детали задачи</h2>
+                  <p id="job-details-subtitle">Попытки, diagnostics и отчет для поддержки.</p>
+                </div>
+                <div class="button-row">
+                  <button id="retry-detail-button" class="primary-button" type="button">Retry</button>
+                  <button id="support-report-button" class="secondary-button" type="button">Скачать отчет</button>
+                  <button id="close-job-details-button" class="secondary-button" type="button">Закрыть</button>
+                </div>
+              </div>
+              <div id="job-details-meta" class="details-grid"></div>
+              <div class="details-grid">
+                <div class="detail-block">
+                  <h3>Diagnostics</h3>
+                  <dl id="job-details-diagnostics" class="kv-list"></dl>
+                </div>
+                <div class="detail-block">
+                  <h3>Support report</h3>
+                  <div id="support-report-summary" class="report-summary"></div>
+                </div>
+              </div>
+              <div class="detail-block">
+                <h3>Попытки</h3>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Попытка</th>
+                        <th>Статус</th>
+                        <th>Endpoint</th>
+                        <th>HTTP</th>
+                        <th>Ошибка</th>
+                        <th>Correlation</th>
+                      </tr>
+                    </thead>
+                    <tbody id="job-attempts-body"></tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
           </div>
         </section>
 
@@ -229,6 +271,6 @@
     </form>
   </dialog>
 
-  <script src="/admin/app.js?v=20260602-2"></script>
+  <script src="/admin/app.js?v=20260602-3"></script>
 </body>
 </html>

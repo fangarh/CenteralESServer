@@ -290,6 +290,13 @@ button:focus-visible {
   margin-bottom: 14px;
 }
 
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .inline-form {
   grid-template-columns: repeat(4, minmax(160px, 1fr)) auto;
   align-items: end;
@@ -381,6 +388,57 @@ th {
   padding: 12px;
 }
 
+.details-panel {
+  margin-top: 18px;
+  border-top: 3px solid var(--primary);
+  padding-top: 18px;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.detail-block {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.detail-block h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.kv-list {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+  gap: 8px 12px;
+  margin: 0;
+}
+
+.kv-list dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.kv-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.report-summary {
+  display: grid;
+  gap: 8px;
+}
+
+.report-summary code {
+  overflow-wrap: anywhere;
+}
+
 .confirm-dialog {
   width: min(520px, calc(100% - 24px));
   border: 1px solid var(--border);
@@ -441,7 +499,8 @@ th {
   }
 
   .summary-grid,
-  .inline-form {
+  .inline-form,
+  .details-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -6,6 +6,8 @@ const state = {
   users: [],
   audit: [],
   processor: null,
+  selectedJobDetails: null,
+  selectedSupportReport: null,
   activeTab: "overview"
 };
 
@@ -86,6 +88,13 @@ function bindForms() {
 function bindSessionActions() {
   document.getElementById("refresh-button").addEventListener("click", refreshData);
   document.getElementById("logout-button").addEventListener("click", logout);
+  document.getElementById("retry-detail-button").addEventListener("click", () => {
+    if (state.selectedJobDetails) {
+      retryJob(state.selectedJobDetails);
+    }
+  });
+  document.getElementById("support-report-button").addEventListener("click", downloadSupportReport);
+  document.getElementById("close-job-details-button").addEventListener("click", clearJobDetails);
 }
 
 async function restoreSession() {
@@ -186,6 +195,7 @@ function renderAll() {
   renderApiKeys();
   renderUsers();
   renderAudit();
+  renderJobDetails();
 }
 
 function renderOverview() {
@@ -233,14 +243,146 @@ function renderJobs() {
       <td>${escapeHtml(job.endpoint || "Не выбран")}</td>
       <td></td>
     `;
+    const openButton = document.createElement("button");
+    openButton.className = "secondary-button";
+    openButton.type = "button";
+    openButton.textContent = "Детали";
+    openButton.addEventListener("click", () => loadJobDetails(job.jobId));
+    row.lastElementChild.appendChild(openButton);
+
     const button = document.createElement("button");
     button.className = "primary-button";
     button.type = "button";
     button.textContent = "Retry";
+    button.style.marginLeft = "8px";
     button.addEventListener("click", () => retryJob(job));
     row.lastElementChild.appendChild(button);
     body.appendChild(row);
   });
+}
+
+async function loadJobDetails(jobId) {
+  try {
+    const encodedJobId = encodeURIComponent(jobId);
+    const [details, supportReport] = await Promise.all([
+      apiGet(`/api/admin/jobs/${encodedJobId}`),
+      apiGet(`/api/admin/jobs/${encodedJobId}/support-report`)
+    ]);
+    state.selectedJobDetails = details;
+    state.selectedSupportReport = supportReport;
+    renderJobDetails();
+    showAlert("Детали задачи загружены.");
+  } catch (error) {
+    showAlert(error.message || "Не удалось загрузить детали задачи.", true);
+  }
+}
+
+function renderJobDetails() {
+  const panel = document.getElementById("job-details-panel");
+  const job = state.selectedJobDetails;
+  const report = state.selectedSupportReport;
+  panel.hidden = !job;
+  if (!job) {
+    return;
+  }
+
+  setText("job-details-title", `Задача ${shortId(job.jobId)}: ${translateStatus(job.status)}`);
+  setText("job-details-subtitle", `${job.capability} · попытка ${job.attemptNumber} · hash ${job.hash}`);
+
+  document.getElementById("job-details-meta").innerHTML = [
+    detailBlock("Идентификаторы", [
+      ["Job ID", job.jobId],
+      ["Subject ID", job.subjectId],
+      ["Hash", job.hash],
+      ["Temporary file", job.temporaryFileKey]
+    ]),
+    detailBlock("Время", [
+      ["Создана", formatDate(job.createdAt)],
+      ["Запланирована", formatDate(job.scheduledAt)],
+      ["Старт", formatDate(job.startedAt)],
+      ["Финиш", formatDate(job.finishedAt)],
+      ["Heartbeat", formatDate(job.heartbeatAt)]
+    ])
+  ].join("");
+
+  renderDefinitionList("job-details-diagnostics", [
+    ["Endpoint", job.diagnostics?.endpoint || "Не выбран"],
+    ["Duration", formatDuration(job.diagnostics?.durationMs)],
+    ["HTTP", job.diagnostics?.httpStatus ?? "Нет данных"],
+    ["Normalized error", job.diagnostics?.normalizedError || "Нет данных"],
+    ["Retryable", formatBool(job.diagnostics?.retryable)],
+    ["Correlation ID", job.diagnostics?.correlationId || "Нет данных"],
+    ["Excerpt", job.diagnostics?.rawErrorExcerpt || "Нет данных"]
+  ]);
+
+  renderSupportReportSummary(report);
+  renderAttempts(job.attempts || []);
+
+  const retryButton = document.getElementById("retry-detail-button");
+  retryButton.disabled = job.status !== "failed" && job.status !== "blocked";
+}
+
+function renderSupportReportSummary(report) {
+  const target = document.getElementById("support-report-summary");
+  if (!report) {
+    target.textContent = "Отчет недоступен.";
+    return;
+  }
+
+  target.innerHTML = `
+    <div>Сформирован: ${escapeHtml(formatDate(report.generatedAt))}</div>
+    <div>Processor: <code>${escapeHtml(report.processorKey)}</code></div>
+    <div>Health: ${escapeHtml(translateHealth(report.processor?.health))}</div>
+    <div>Audit events: ${report.auditEvents?.length ?? 0}</div>
+    <div>Result: ${report.result ? escapeHtml(report.result.resultKind) : "Нет результата"}</div>
+  `;
+}
+
+function renderAttempts(attempts) {
+  const body = document.getElementById("job-attempts-body");
+  body.innerHTML = "";
+  if (attempts.length === 0) {
+    appendEmptyRow(body, 6, "История попыток недоступна.");
+    return;
+  }
+
+  attempts.forEach(attempt => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${attempt.attemptNumber}</td>
+      <td>${statusPill(attempt.status)}</td>
+      <td>${escapeHtml(attempt.endpoint || "Не выбран")}</td>
+      <td>${attempt.httpStatus ?? "Нет данных"}</td>
+      <td>${escapeHtml(attempt.normalizedError || "Нет данных")}</td>
+      <td><span class="mono">${escapeHtml(attempt.correlationId || "Нет данных")}</span></td>
+    `;
+    body.appendChild(row);
+  });
+}
+
+function clearJobDetails() {
+  state.selectedJobDetails = null;
+  state.selectedSupportReport = null;
+  renderJobDetails();
+}
+
+function downloadSupportReport() {
+  if (!state.selectedSupportReport) {
+    showAlert("Сначала откройте детали задачи.", true);
+    return;
+  }
+
+  const jobId = state.selectedSupportReport.jobId || state.selectedJobDetails?.jobId || "job";
+  const blob = new Blob(
+    [JSON.stringify(state.selectedSupportReport, null, 2)],
+    { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `centerales-support-report-${shortId(jobId)}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
 }
 
 function renderApiKeys() {
@@ -333,17 +475,21 @@ function renderAudit() {
 }
 
 async function retryJob(job) {
+  const jobId = job.jobId;
   const comment = await confirmAction(
     "Запустить retry",
-    `Будет создана новая попытка для задачи ${shortId(job.jobId)}. Действие попадет в аудит.`,
+    `Будет создана новая попытка для задачи ${shortId(jobId)}. Действие попадет в аудит.`,
     false
   );
   if (comment === null) {
     return;
   }
-  await apiPost(`/api/admin/jobs/${encodeURIComponent(job.jobId)}/retry`, { comment: comment || null });
+  await apiPost(`/api/admin/jobs/${encodeURIComponent(jobId)}/retry`, { comment: comment || null });
   showAlert("Retry запущен.");
   await loadJobs();
+  if (state.selectedJobDetails?.jobId === jobId) {
+    await loadJobDetails(jobId);
+  }
   await loadAudit();
   renderAll();
 }
@@ -544,6 +690,27 @@ function appendEmptyRow(body, columns, text) {
   body.appendChild(row);
 }
 
+function detailBlock(title, rows) {
+  return `
+    <div class="detail-block">
+      <h3>${escapeHtml(title)}</h3>
+      <dl class="kv-list">
+        ${rows.map(([name, value]) => `
+          <dt>${escapeHtml(name)}</dt>
+          <dd>${escapeHtml(value ?? "Нет данных")}</dd>
+        `).join("")}
+      </dl>
+    </div>
+  `;
+}
+
+function renderDefinitionList(id, rows) {
+  document.getElementById(id).innerHTML = rows.map(([name, value]) => `
+    <dt>${escapeHtml(name)}</dt>
+    <dd>${escapeHtml(value ?? "Нет данных")}</dd>
+  `).join("");
+}
+
 function statusPill(status) {
   const kind = status === "active" || status === "completed" ? "ok"
     : status === "disabled" || status === "failed" || status === "blocked" ? "danger"
@@ -606,6 +773,14 @@ function formatDate(value) {
     dateStyle: "short",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+function formatDuration(value) {
+  return typeof value === "number" ? `${Math.round(value)} ms` : "Нет данных";
+}
+
+function formatBool(value) {
+  return value === true ? "Да" : value === false ? "Нет" : "Нет данных";
 }
 
 function setText(id, value) {
