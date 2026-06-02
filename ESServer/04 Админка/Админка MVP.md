@@ -647,7 +647,7 @@ heartbeat
 - PostgreSQL: доступность, latency последней проверки, ошибка подключения при наличии;
 - Temporary storage: used percent, free space, soft/hard limit, возможность записи;
 - Result storage: доступность чтения/записи;
-- Queue: queued, processing, retry scheduled, blocked/final failed;
+- Queue: queued, processing, retry scheduled, failed/blocked;
 - Processor health: состояние processor instance и endpoint pool без опасных активных вызовов;
 - Последняя проверка: время, длительность, correlationId.
 
@@ -865,7 +865,7 @@ Settings
 сложные роли кроме admin
 создание processor с нуля через UI
 редактор произвольных contracts
-retention policy UI для результатов
+retention editing/cleanup UI для результатов
 полноценная аналитика и графики
 экспорт больших payload пакетами
 глобальный DevOps mode

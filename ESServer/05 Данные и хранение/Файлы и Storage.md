@@ -130,7 +130,7 @@ Cleanup temporary input files:
 
 ```text
 completed -> удалить input file
-blocked/final failed -> сохранить input file для manual retry
+failed/blocked -> сохранить input file для manual retry
 cancelled -> удалить input file
 abandoned -> future dry-run candidate после grace period
 ```

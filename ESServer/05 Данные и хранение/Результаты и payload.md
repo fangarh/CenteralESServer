@@ -117,7 +117,7 @@ payload table = pdf_stamp_recognition_results
 - JSON payload хранится в result store конкретной подсистемы;
 - общий индекс хранит `payload_size`;
 - списки и search endpoints не читают payload без необходимости;
-- Admin UI открывает raw JSON только на странице результата или по явному действию.
+- Admin UI не встраивает raw JSON в обычный Result Details; полный payload доступен только по явному `Debug JSON` download через controlled endpoint.
 
 Причина:
 
@@ -141,9 +141,23 @@ store_json_summary_plus_artifact
 ```http
 GET /api/admin/results?capability=&hash=&jobId=&limit=
 GET /api/admin/results/{resultIndexId}
+GET /api/admin/results/{resultIndexId}/payload
 ```
 
-Admin Results возвращает только lightweight metadata из `processing_result_index` и связанную job metadata. Raw `payload_json` не возвращается в списке и деталях результата, чтобы не тащить большие payload и не раскрывать лишние данные в операционном UI.
+Admin Results возвращает только lightweight metadata из `processing_result_index` и связанную job metadata. Raw `payload_json` не возвращается в списке и обычных деталях результата, чтобы не тащить большие payload и не раскрывать лишние данные в операционном UI.
+
+Для `pdf_stamp_recognition_results` обычный Result Details показывает безопасный summary: counts, page keys, optional `izm_number` и короткие excerpts ошибок без входного PDF, storage key и полного raw JSON.
+
+Полный raw JSON доступен только через отдельный controlled debug endpoint `GET /api/admin/results/{resultIndexId}/payload`:
+
+- endpoint требует admin session cookie и является read-only;
+- CSRF не требуется, потому что состояние не меняется;
+- table allowlist ограничен `pdf_stamp_recognition_results`;
+- неподдержанные payload table возвращают `422 unsupported_payload_table`;
+- payload больше `1 MiB` возвращает `413 payload_too_large`;
+- ответ содержит metadata, warning и поле `payload` с исходным JSON.
+
+Admin UI не встраивает raw JSON в Result Details. Для него есть отдельная явная кнопка `Debug JSON`, которая скачивает controlled debug payload.
 
 Для будущего обработчика изображений:
 
