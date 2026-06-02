@@ -100,6 +100,7 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - 2026-06-02: Admin Audit UI checkpoint added: `/admin -> Аудит` now has action/target/actor/date/limit filters, event count/summary, and expandable safe details for audit metadata without raw value JSON, credentials, hashes, or payload.
 - 2026-06-02: PostgreSQL schema bootstrap now uses an explicit SQL migration runner without EF: baseline SQL lives in `Postgres/Migrations/0001_processing_baseline.sql`, migrations are embedded, applied in id order, recorded in `schema_migrations`, and skipped idempotently on later startup.
 - 2026-06-02: Admin UI static assets split shared helper logic out of `wwwroot/admin/app.js` into `formatters.js`, `dom.js`, `http.js`, and `confirm-dialog.js` while keeping the current browser-only static delivery model.
+- 2026-06-02: First-admin bootstrap path added as a separate test WinForms app `CenteralES.Admin.Bootstrap.WinForms`, backed by shared `IAdminBootstrapper`/`PostgresAdminBootstrapper`; it applies SQL migrations, creates the first active admin only when none exist, and writes `bootstrap_admin_user` audit without password/hash/connection string secrets.
 
 ## Workflow Rules
 
@@ -109,4 +110,4 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-06-02 after SQL migration runner and Admin UI asset split*
+*Last updated: 2026-06-02 after first-admin WinForms bootstrap app*

@@ -1,4 +1,5 @@
 using CenteralES.Admin;
+using CenteralES.Infrastructure.AccessControl;
 using CenteralES.Infrastructure.Postgres;
 using CenteralES.Infrastructure.PdfStampRecognition;
 using CenteralES.Infrastructure.Processing;
@@ -37,6 +38,55 @@ public sealed class PostgresProcessingJobQueueTests
 
         var count = (long)(await command.ExecuteScalarAsync(CancellationToken.None) ?? 0L);
         Assert.Equal(1L, count);
+    }
+
+    [Fact]
+    public async Task Admin_bootstrap_creates_first_admin_once_and_writes_safe_audit()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetAdminBootstrapTablesAsync(dataSource, CancellationToken.None);
+
+        var adminBootstrapper = new PostgresAdminBootstrapper(dataSource);
+        const string password = "first-admin-password";
+
+        var first = await adminBootstrapper.BootstrapFirstAdminAsync(
+            new AdminBootstrapUserCommand(
+                "bootstrap-admin",
+                password,
+                DateTimeOffset.UtcNow,
+                "create first admin",
+                "integration_test"),
+            CancellationToken.None);
+
+        var second = await adminBootstrapper.BootstrapFirstAdminAsync(
+            new AdminBootstrapUserCommand(
+                "another-admin",
+                "another-password",
+                DateTimeOffset.UtcNow,
+                null,
+                "integration_test"),
+            CancellationToken.None);
+
+        var success = Assert.IsType<AdminBootstrapUserSuccess>(first);
+        var alreadyInitialized = Assert.IsType<AdminBootstrapAlreadyInitialized>(second);
+        var stored = await ReadAdminBootstrapRowAsync(dataSource, success.User.UserId, CancellationToken.None);
+
+        Assert.Equal("bootstrap-admin", success.User.Login);
+        Assert.Equal(1, alreadyInitialized.ActiveAdminCount);
+        Assert.NotEqual(password, stored.PasswordHash);
+        Assert.Equal(AdminAuditActions.BootstrapAdminUser, stored.AuditAction);
+        Assert.DoesNotContain(password, stored.AuditNewValueJson, StringComparison.Ordinal);
+        Assert.DoesNotContain(password, stored.AuditTechnicalMetadataJson, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -532,6 +582,50 @@ public sealed class PostgresProcessingJobQueueTests
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    private static async Task ResetAdminBootstrapTablesAsync(NpgsqlDataSource dataSource, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("""
+            truncate table
+                admin_audit_events,
+                admin_sessions,
+                admin_users
+            cascade;
+            """, connection);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task<AdminBootstrapRow> ReadAdminBootstrapRowAsync(
+        NpgsqlDataSource dataSource,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("""
+            select
+                users.password_hash,
+                audit.action,
+                audit.new_value_json::text,
+                audit.technical_metadata_json::text
+            from admin_users users
+            join admin_audit_events audit
+              on audit.target_id = replace(users.id::text, '-', '')
+            where users.id = @user_id
+              and audit.action = @action;
+            """, connection);
+        command.Parameters.AddWithValue("user_id", userId);
+        command.Parameters.AddWithValue("action", AdminAuditActions.BootstrapAdminUser);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        Assert.True(await reader.ReadAsync(cancellationToken));
+
+        return new AdminBootstrapRow(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetString(3));
+    }
+
     private static async Task<AuditEventRow> ReadAuditEventAsync(
         NpgsqlDataSource dataSource,
         Guid auditId,
@@ -555,4 +649,10 @@ public sealed class PostgresProcessingJobQueueTests
     }
 
     private sealed record AuditEventRow(string Action, string TargetId, string NewValueJson);
+
+    private sealed record AdminBootstrapRow(
+        string PasswordHash,
+        string AuditAction,
+        string AuditNewValueJson,
+        string AuditTechnicalMetadataJson);
 }

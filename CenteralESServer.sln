@@ -35,6 +35,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "AccessControl", "AccessCont
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CenteralES.AccessControl", "src\Modules\AccessControl\CenteralES.AccessControl.csproj", "{DD24174B-D0D3-4042-9EB0-00FA94CEE56D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CenteralES.Admin.Bootstrap.WinForms", "src\Apps\CenteralES.Admin.Bootstrap.WinForms\CenteralES.Admin.Bootstrap.WinForms.csproj", "{D88DE115-C72A-45DA-A88A-5C9784B49805}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -189,6 +191,18 @@ Global
 		{DD24174B-D0D3-4042-9EB0-00FA94CEE56D}.Release|x64.Build.0 = Release|Any CPU
 		{DD24174B-D0D3-4042-9EB0-00FA94CEE56D}.Release|x86.ActiveCfg = Release|Any CPU
 		{DD24174B-D0D3-4042-9EB0-00FA94CEE56D}.Release|x86.Build.0 = Release|Any CPU
+		{D88DE115-C72A-45DA-A88A-5C9784B49805}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D88DE115-C72A-45DA-A88A-5C9784B49805}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D88DE115-C72A-45DA-A88A-5C9784B49805}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D88DE115-C72A-45DA-A88A-5C9784B49805}.Debug|x64.Build.0 = Debug|Any CPU
+		{D88DE115-C72A-45DA-A88A-5C9784B49805}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D88DE115-C72A-45DA-A88A-5C9784B49805}.Debug|x86.Build.0 = Debug|Any CPU
+		{D88DE115-C72A-45DA-A88A-5C9784B49805}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D88DE115-C72A-45DA-A88A-5C9784B49805}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D88DE115-C72A-45DA-A88A-5C9784B49805}.Release|x64.ActiveCfg = Release|Any CPU
+		{D88DE115-C72A-45DA-A88A-5C9784B49805}.Release|x64.Build.0 = Release|Any CPU
+		{D88DE115-C72A-45DA-A88A-5C9784B49805}.Release|x86.ActiveCfg = Release|Any CPU
+		{D88DE115-C72A-45DA-A88A-5C9784B49805}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -209,5 +223,6 @@ Global
 		{EC447DCF-ABFA-6E24-52A5-D7FD48A5C558} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{0895A53D-46B3-E72D-A777-9FBE49721DF6} = {EC447DCF-ABFA-6E24-52A5-D7FD48A5C558}
 		{DD24174B-D0D3-4042-9EB0-00FA94CEE56D} = {0895A53D-46B3-E72D-A777-9FBE49721DF6}
+		{D88DE115-C72A-45DA-A88A-5C9784B49805} = {AD2A5A3B-A595-3E96-334A-002D08FE630C}
 	EndGlobalSection
 EndGlobal

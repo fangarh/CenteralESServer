@@ -39,7 +39,7 @@ Scope:
 Scope:
 
 - API key model and auth middleware; baseline implemented, admin creation/rotation UI remains later in Phase 2/4;
-- admin login/session/CSRF baseline; backend baseline implemented, init command/UI/audit remain later in Phase 2/4;
+- admin login/session/CSRF baseline; backend baseline implemented, first-admin WinForms bootstrap app implemented, broader UI/audit work continues in Phase 2/4;
 - manual retry одной задачи; backend endpoint implemented, UI remains Phase 4;
 - audit для admin actions; current MVP dangerous actions and filtered Audit UI implemented;
 - health live/ready и Worker heartbeat; baseline already implemented in Phase 1, remaining work is hardening/admin visibility;
@@ -56,7 +56,7 @@ Scope:
 - Dockerfiles для Web и Worker;
 - docker-compose с PostgreSQL и shared local storage;
 - configuration examples;
-- init command для первого admin;
+- first-admin bootstrap path; shared backend service and WinForms test app implemented before Docker checkpoint;
 - migration/bootstrap process без EF; explicit SQL runner baseline implemented before Docker checkpoint;
 - smoke tests для локальной поставки.
 

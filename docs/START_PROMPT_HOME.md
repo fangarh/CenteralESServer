@@ -21,6 +21,7 @@ main
 - dd33ff3 Add admin audit filters
 - 1f4dfdd Add admin settings UI
 - ecde808 Add admin results UI
+- a4c1627 Add SQL migration runner and split admin UI helpers
 
 Работай по-русски. Не выводи секреты из db.env и logon.env.
 db.env, logon.env, .codex-local/ и test.pdf должны оставаться ignored.
@@ -61,11 +62,14 @@ db.env, logon.env, .codex-local/ и test.pdf должны оставаться i
 - Admin Results read-only реализован.
 - Admin Settings read-only реализован.
 - Admin Audit UI с фильтрами и safe details реализован.
+- SQL migration runner без EF реализован.
+- Отдельное тестовое WinForms-приложение для создания первого admin реализовано:
+  src/Apps/CenteralES.Admin.Bootstrap.WinForms
 - ADMIN-03 закрыт для текущего MVP-набора dangerous actions.
 - Docker Compose еще не реализован.
 
 Текущая версия admin static assets:
-20260602-10
+20260602-11
 
 Последняя полная проверка после Audit UI:
 - node --check src\Apps\CenteralES.Web\wwwroot\admin\app.js
@@ -78,24 +82,12 @@ db.env, logon.env, .codex-local/ и test.pdf должны оставаться i
 - Ожидаемая console error до логина: 401 /api/admin/auth/me.
 
 Следующий логичный шаг без Docker:
-Init/admin bootstrap command.
+PDF result summary в Admin Result Details.
 
 Зачем:
-- первый admin нужен для входа;
-- logon.env есть локально, но нужен повторяемый bootstrap-путь;
-- для MVP-поставки нужен способ создать первого администратора без web setup wizard;
-- это подготовит Docker Compose delivery.
-
-Предложенный checkpoint:
-- CLI или отдельный command path для создания первого admin;
-- чтение login/password из env/аргументов без записи секретов в Git;
-- idempotent поведение;
-- без вывода пароля/hash;
-- audit/логирование без секретов;
-- документация локального запуска;
-- focused integration tests;
-- build/test/smoke;
-- отдельный commit и push.
+- Results/Result Details сейчас показывают metadata без raw payload;
+- прикладному администратору нужен человекочитаемый summary распознавания;
+- raw JSON должен оставаться отдельной controlled/debug surface, не главным экраном.
 
 После этого следующий крупный блок:
 Docker Compose Delivery MVP:

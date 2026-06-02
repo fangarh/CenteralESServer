@@ -6,6 +6,7 @@ public static class AdminAuditActions
     public const string CreateApiKey = "create_api_key";
     public const string DisableApiKey = "disable_api_key";
     public const string CreateAdminUser = "create_admin_user";
+    public const string BootstrapAdminUser = "bootstrap_admin_user";
     public const string DisableAdminUser = "disable_admin_user";
     public const string ChangeAdminPassword = "change_admin_password";
 }

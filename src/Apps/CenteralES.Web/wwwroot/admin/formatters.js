@@ -49,6 +49,7 @@
       create_api_key: "Создание ключа API",
       disable_api_key: "Отключение ключа API",
       create_admin_user: "Создание администратора",
+      bootstrap_admin_user: "Первичный bootstrap администратора",
       disable_admin_user: "Отключение администратора",
       change_admin_password: "Смена пароля администратора"
     };

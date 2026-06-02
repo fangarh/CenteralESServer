@@ -767,7 +767,21 @@ POST /api/admin/users/{userId}/password
 - хранится только hash-ом;
 - предпочтительно `Argon2id`, допустимый fallback `bcrypt` или встроенный в .NET `PBKDF2-SHA256`.
 
-Первый admin создаётся через init command, например `centerales admin create`. Web setup wizard в MVP не делаем.
+Первый admin создаётся отдельным тестовым WinForms bootstrap-приложением:
+
+```text
+src/Apps/CenteralES.Admin.Bootstrap.WinForms
+```
+
+Приложение использует общий backend contract `IAdminBootstrapper` и PostgreSQL-реализацию `PostgresAdminBootstrapper`: применяет SQL migrations, проверяет количество активных администраторов и создаёт первого admin user только если активных администраторов ещё нет. Web setup wizard в MVP не делаем.
+
+Bootstrap audit action:
+
+```text
+bootstrap_admin_user
+```
+
+Audit не содержит пароль, password hash, connection string или другие секреты. Повторный запуск после создания первого активного admin возвращает состояние `already initialized` и не перезаписывает существующего пользователя.
 
 Сложные роли и права не входят в MVP, но модель должна позволять добавить их позже.
 
