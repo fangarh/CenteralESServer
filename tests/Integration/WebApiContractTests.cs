@@ -41,6 +41,31 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task Admin_ui_assets_are_served_with_static_content_types()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = _factory.CreateClient();
+        var cssResponse = await client.GetAsync("/admin/app.css");
+        var jsResponse = await client.GetAsync("/admin/app.js");
+        var css = await cssResponse.Content.ReadAsStringAsync();
+        var js = await jsResponse.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, cssResponse.StatusCode);
+        Assert.Equal("text/css", cssResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Contains(":root", css, StringComparison.Ordinal);
+        Assert.DoesNotContain("<!doctype html>", css, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Equal(HttpStatusCode.OK, jsResponse.StatusCode);
+        Assert.Equal("text/javascript", jsResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("const state", js, StringComparison.Ordinal);
+        Assert.DoesNotContain("<!doctype html>", js, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Live_health_returns_healthy_status()
     {
         if (!HasConfiguredTestDatabase())
