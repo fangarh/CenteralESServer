@@ -52,7 +52,10 @@ public sealed class WorkerJobProcessor
             await _queue.CompleteAsync(
                 new CompleteProcessingJobCommand(job.JobId, job.SubjectId, saved.ResultIndexId, adapterResult.Diagnostics, DateTimeOffset.UtcNow),
                 cancellationToken);
-            await DeleteTemporaryFileAfterTerminalStateAsync(job, cancellationToken);
+            if (ProcessingInputRetentionPolicy.ShouldDeleteTemporaryInputAfterTerminalState(ProcessingJobStatus.Completed))
+            {
+                await DeleteTemporaryFileAfterTerminalStateAsync(job, cancellationToken);
+            }
 
             _logger.LogInformation("Completed job {JobId}.", job.JobId);
         }
@@ -87,10 +90,7 @@ public sealed class WorkerJobProcessor
                     DateTimeOffset.UtcNow),
                 cancellationToken);
 
-            if (final)
-            {
-                await DeleteTemporaryFileAfterTerminalStateAsync(job, cancellationToken);
-            }
+            LogPreservedTemporaryFileForManualRetry(final, job);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -115,10 +115,7 @@ public sealed class WorkerJobProcessor
                     DateTimeOffset.UtcNow),
                 cancellationToken);
 
-            if (final)
-            {
-                await DeleteTemporaryFileAfterTerminalStateAsync(job, cancellationToken);
-            }
+            LogPreservedTemporaryFileForManualRetry(final, job);
         }
     }
 
@@ -131,6 +128,17 @@ public sealed class WorkerJobProcessor
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex, "Temporary file cleanup failed for terminal job {JobId}.", job.JobId);
+        }
+    }
+
+    private void LogPreservedTemporaryFileForManualRetry(bool final, ClaimedProcessingJob job)
+    {
+        if (final)
+        {
+            _logger.LogInformation(
+                "Preserving temporary file {TemporaryFileKey} for final failed job {JobId} so manual retry can reuse the original input.",
+                job.TemporaryFileKey,
+                job.JobId);
         }
     }
 }

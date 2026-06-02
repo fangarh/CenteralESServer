@@ -114,7 +114,7 @@ public sealed class WorkerJobProcessorTests
     }
 
     [Fact]
-    public async Task ProcessAsync_deletes_temporary_pdf_after_terminal_adapter_failure()
+    public async Task ProcessAsync_preserves_temporary_pdf_after_terminal_adapter_failure_for_manual_retry()
     {
         var job = new ClaimedProcessingJob(
             Guid.NewGuid(),
@@ -149,7 +149,7 @@ public sealed class WorkerJobProcessorTests
 
         Assert.NotNull(queue.Failed);
         Assert.True(queue.Failed.Final);
-        Assert.Equal(job.TemporaryFileKey, fileStore.DeletedKey);
+        Assert.Null(fileStore.DeletedKey);
     }
 
     [Fact]
@@ -188,11 +188,11 @@ public sealed class WorkerJobProcessorTests
 
         Assert.NotNull(queue.Failed);
         Assert.True(queue.Failed.Final);
-        Assert.Equal(job.TemporaryFileKey, fileStore.DeletedKey);
+        Assert.Null(fileStore.DeletedKey);
     }
 
     [Fact]
-    public async Task ProcessAsync_marks_internal_worker_error_terminal_and_deletes_temporary_pdf()
+    public async Task ProcessAsync_marks_internal_worker_error_terminal_and_preserves_temporary_pdf_for_manual_retry()
     {
         var job = new ClaimedProcessingJob(
             Guid.NewGuid(),
@@ -218,7 +218,7 @@ public sealed class WorkerJobProcessorTests
         Assert.True(queue.Failed.Final);
         Assert.Equal(NormalizedProcessorError.InternalError, queue.Failed.Error);
         Assert.False(queue.Failed.Diagnostics.Retryable);
-        Assert.Equal(job.TemporaryFileKey, fileStore.DeletedKey);
+        Assert.Null(fileStore.DeletedKey);
     }
 
     [Fact]

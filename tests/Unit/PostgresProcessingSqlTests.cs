@@ -51,4 +51,11 @@ public sealed class PostgresProcessingSqlTests
         Assert.Contains("old_value_json jsonb null", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("new_value_json jsonb null", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Schema_contains_baseline_migration_marker()
+    {
+        Assert.Contains("create table if not exists schema_migrations", PostgresProcessingSql.Schema, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("0001_processing_baseline", PostgresProcessingSql.MarkBaselineMigration, StringComparison.OrdinalIgnoreCase);
+    }
 }

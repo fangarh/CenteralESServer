@@ -7,6 +7,9 @@ internal static class PublicPdfEndpoints
 {
     public static void MapPublicPdfEndpoints(this WebApplication app, long pdfMaxUploadBytes)
     {
+        const long multipartOverheadAllowanceBytes = 1L * 1024 * 1024;
+        var requestSizeLimitBytes = pdfMaxUploadBytes + multipartOverheadAllowanceBytes;
+
         app.MapPost("/api/pdf-stamp-recognition/jobs", async (
             HttpRequest request,
             IApiKeyAuthenticator apiKeyAuthenticator,
@@ -31,7 +34,24 @@ internal static class PublicPdfEndpoints
                 return Results.BadRequest(ApiErrorResponse.Create("invalid_input", "PDF file must be sent as multipart form data."));
             }
 
-            var form = await request.ReadFormAsync(cancellationToken);
+            IFormCollection form;
+            try
+            {
+                form = await request.ReadFormAsync(cancellationToken);
+            }
+            catch (BadHttpRequestException ex) when (ex.StatusCode == StatusCodes.Status413PayloadTooLarge)
+            {
+                return Results.Json(
+                    ApiErrorResponse.Create("payload_too_large", $"PDF upload request exceeds the configured limit of {pdfMaxUploadBytes} bytes."),
+                    statusCode: StatusCodes.Status413PayloadTooLarge);
+            }
+            catch (InvalidDataException)
+            {
+                return Results.Json(
+                    ApiErrorResponse.Create("payload_too_large", $"PDF upload request exceeds the configured limit of {pdfMaxUploadBytes} bytes."),
+                    statusCode: StatusCodes.Status413PayloadTooLarge);
+            }
+
             var file = form.Files.GetFile("file") ?? form.Files.FirstOrDefault();
 
             if (file is null || file.Length == 0)
@@ -53,6 +73,14 @@ internal static class PublicPdfEndpoints
             if (existingResult is not null)
             {
                 return Results.Ok(ApiMappings.ToPdfResultResponse(existingResult));
+            }
+
+            var currentJob = await queue.GetCurrentByHashAsync(PdfStampRecognitionConstants.Capability, hash, cancellationToken);
+            if (currentJob is not null && ApiMappings.IsPublicPending(currentJob.Status))
+            {
+                return Results.Accepted(
+                    $"/api/jobs/{currentJob.JobId:N}",
+                    ApiMappings.ToPdfJobResponse(currentJob, deduplicated: true));
             }
 
             var temporaryFileKey = $"incoming/{hash.Replace("sha256:", string.Empty, StringComparison.Ordinal)}.pdf";
@@ -85,6 +113,7 @@ internal static class PublicPdfEndpoints
                     enqueueResult.Deduplicated));
         })
         .DisableAntiforgery()
+        .WithMetadata(new PdfUploadRequestSizeLimitMetadata(requestSizeLimitBytes))
         .WithName("CreatePdfStampRecognitionJob");
 
         app.MapGet("/api/pdf-stamp-recognition/results/{hash}", async (
@@ -146,5 +175,15 @@ internal static class PublicPdfEndpoints
                 : Results.Ok(ApiMappings.ToPdfJobResponse(job, deduplicated: false));
         })
             .WithName("GetJob");
+    }
+
+    private sealed class PdfUploadRequestSizeLimitMetadata : Microsoft.AspNetCore.Http.Metadata.IRequestSizeLimitMetadata
+    {
+        public PdfUploadRequestSizeLimitMetadata(long maxRequestBodySize)
+        {
+            MaxRequestBodySize = maxRequestBodySize;
+        }
+
+        public long? MaxRequestBodySize { get; }
     }
 }

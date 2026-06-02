@@ -557,6 +557,56 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task Duplicate_active_pdf_job_returns_existing_job_before_temporary_storage_write()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var previousHardLimit = Environment.GetEnvironmentVariable("Storage__TemporaryHardLimitBytes");
+        var previousTemporaryRoot = Environment.GetEnvironmentVariable("Storage__TemporaryRoot");
+        var temporaryRoot = Path.Combine(Path.GetTempPath(), $"centerales-dedup-it-{Guid.NewGuid():N}");
+        var pdfBytes = Encoding.UTF8.GetBytes($"%PDF-1.7 duplicate active job {Guid.NewGuid():N}");
+        Environment.SetEnvironmentVariable("Storage__TemporaryHardLimitBytes", pdfBytes.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Environment.SetEnvironmentVariable("Storage__TemporaryRoot", temporaryRoot);
+
+        try
+        {
+            using var factory = new WebApplicationFactory<Program>();
+            var client = await CreateAuthorizedClientAsync(factory);
+            using var firstContent = new MultipartFormDataContent();
+            using var firstFile = new ByteArrayContent(pdfBytes);
+            firstContent.Add(firstFile, "file", "duplicate.pdf");
+
+            var first = await client.PostAsync("/api/pdf-stamp-recognition/jobs", firstContent);
+            var firstPayload = await first.Content.ReadFromJsonAsync<JsonElement>();
+
+            using var duplicateContent = new MultipartFormDataContent();
+            using var duplicateFile = new ByteArrayContent(pdfBytes);
+            duplicateContent.Add(duplicateFile, "file", "duplicate.pdf");
+
+            var duplicate = await client.PostAsync("/api/pdf-stamp-recognition/jobs", duplicateContent);
+            var duplicatePayload = await duplicate.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
+            Assert.Equal(HttpStatusCode.Accepted, duplicate.StatusCode);
+            Assert.False(firstPayload.GetProperty("deduplicated").GetBoolean());
+            Assert.True(duplicatePayload.GetProperty("deduplicated").GetBoolean());
+            Assert.Equal(firstPayload.GetProperty("jobId").GetString(), duplicatePayload.GetProperty("jobId").GetString());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("Storage__TemporaryHardLimitBytes", previousHardLimit);
+            Environment.SetEnvironmentVariable("Storage__TemporaryRoot", previousTemporaryRoot);
+            if (Directory.Exists(temporaryRoot))
+            {
+                Directory.Delete(temporaryRoot, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task Active_pdf_job_can_be_observed_by_hash_and_job_id()
     {
         if (!HasConfiguredTestDatabase())

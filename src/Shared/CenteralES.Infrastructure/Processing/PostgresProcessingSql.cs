@@ -3,6 +3,11 @@ namespace CenteralES.Infrastructure.Processing;
 public static class PostgresProcessingSql
 {
     public const string Schema = """
+        create table if not exists schema_migrations (
+            id text primary key,
+            applied_at timestamptz not null
+        );
+
         create table if not exists processing_subjects (
             id uuid primary key,
             capability text not null,
@@ -151,6 +156,12 @@ public static class PostgresProcessingSql
 
         create index if not exists ix_admin_audit_events_actor
             on admin_audit_events (actor_admin_id, occurred_at desc);
+        """;
+
+    public const string MarkBaselineMigration = """
+        insert into schema_migrations (id, applied_at)
+        values ('0001_processing_baseline', @applied_at)
+        on conflict (id) do nothing;
         """;
 
     public const string ClaimNext = """
