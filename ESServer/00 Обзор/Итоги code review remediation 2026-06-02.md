@@ -27,7 +27,7 @@
 - PostgreSQL Admin read stores физически разделены на jobs, processor, audit и results.
 - `PostgresAdminProcessingReadStore` оставлен только composite facade.
 - Добавлены Production config files для Web и Worker.
-- Проверен вариант `IHttpClientFactory`; пакет не добавлялся, оставлен DI-owned singleton `HttpClient`.
+- На этой итерации `HttpClient` оставался DI-owned singleton; позднее, в Docker Compose baseline, HTTP recognizer переведён на `IHttpClientFactory`.
 
 ### Итерация 3: production migration path
 
@@ -57,8 +57,8 @@ dotnet test CenteralESServer.sln --no-build --no-restore -maxcpucount:1 -v:minim
 
 ```text
 Build: success
-Unit tests: 59 passed
-Integration tests: 58 passed
+Unit tests: 74 passed
+Integration tests: 61 passed
 ```
 
 Дополнительно:
@@ -69,13 +69,13 @@ dotnet run --project src/Apps/CenteralES.DatabaseMigrator/CenteralES.DatabaseMig
 
 ## Следующий шаг
 
-Следующий крупный блок:
+Следующий крупный блок после этой заметки был выполнен:
 
 ```text
 Docker Compose Delivery MVP
 ```
 
-Минимальный состав:
+Итог зафиксирован в [[Итоги Docker Compose baseline 2026-06-02]]. Минимальный состав:
 
 - PostgreSQL;
 - migrator/init step;

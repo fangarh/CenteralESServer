@@ -202,5 +202,5 @@ Integration: 45/45 passed
 2. Запустить проверки проектным SDK, если путь `C:\Users\Admin\.dotnet\dotnet.exe` появится или будет исправлен.
 3. Закоммитить текущий пакет исправлений.
 4. Следующий отдельный refactor checkpoint: вынести SQL migrations в файлы и сделать простой migration runner.
-5. После этого: разбирать `wwwroot/admin/app.js` на модули или переходить к Docker Compose Delivery MVP.
-
+5. Исторический next step был: разбирать `wwwroot/admin/app.js` на модули или переходить к Docker Compose Delivery MVP.
+6. Актуализация 2026-06-02: оба направления уже закрыты baseline-ами; Docker Compose Delivery MVP добавлен, но runtime validation `docker compose config/build/up` ожидает машину с Docker.
