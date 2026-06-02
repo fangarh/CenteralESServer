@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CenteralES.Admin;
 using CenteralES.Processing;
 using Npgsql;
@@ -320,7 +321,7 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
         return results;
     }
 
-    public async Task<AdminResultReference?> GetResultAsync(Guid resultIndexId, CancellationToken cancellationToken)
+    public async Task<AdminResultDetails?> GetResultAsync(Guid resultIndexId, CancellationToken cancellationToken)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var command = new NpgsqlCommand("""
@@ -345,9 +346,59 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
         command.Parameters.AddWithValue("result_index_id", resultIndexId);
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        return await reader.ReadAsync(cancellationToken)
-            ? ReadResultReferenceRow(reader)
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        var reference = ReadResultReferenceRow(reader);
+        await reader.DisposeAsync();
+
+        var summary = reference.PayloadTable == "pdf_stamp_recognition_results"
+            ? await ReadPdfStampRecognitionSummaryAsync(connection, reference.PayloadId, cancellationToken)
             : null;
+
+        return new AdminResultDetails(reference, summary);
+    }
+
+    private static async Task<AdminPdfStampRecognitionResultSummary?> ReadPdfStampRecognitionSummaryAsync(
+        NpgsqlConnection connection,
+        Guid payloadId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new NpgsqlCommand("""
+            select payload_json::text
+            from pdf_stamp_recognition_results
+            where id = @payload_id;
+            """, connection);
+        command.Parameters.AddWithValue("payload_id", payloadId);
+
+        var payloadJson = (string?)await command.ExecuteScalarAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(payloadJson))
+        {
+            return null;
+        }
+
+        using var document = JsonDocument.Parse(payloadJson);
+        var root = document.RootElement;
+
+        var pageKeys = ReadObjectKeys(root, "workers_page");
+        var errorExcerpts = ReadStringArray(root, "errors")
+            .Select(ToSafeExcerpt)
+            .Where(value => value is not null)
+            .Cast<string>()
+            .Take(5)
+            .ToArray();
+
+        return new AdminPdfStampRecognitionResultSummary(
+            WorkerGroupCount: CountArrayItems(root, "workers"),
+            WorkerTextItemCount: CountNestedWorkerTextItems(root),
+            WorkerPageCount: pageKeys.Count,
+            UnrecognizedPageCount: CountArrayItems(root, "unrecognized_pages"),
+            ErrorCount: CountArrayItems(root, "errors"),
+            IzmNumber: ReadString(root, "izm_number"),
+            PageKeys: pageKeys,
+            ErrorExcerpts: errorExcerpts);
     }
 
     private static string ToProcessorHealth(IReadOnlyList<AdminProcessorWorkerStatus> workers)
@@ -637,6 +688,79 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
         return normalized.Length <= maxLength
             ? normalized
             : string.Concat(normalized.AsSpan(0, maxLength), "...");
+    }
+
+    private static int CountArrayItems(JsonElement root, string propertyName)
+    {
+        return root.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.Array
+            ? value.GetArrayLength()
+            : 0;
+    }
+
+    private static int CountNestedWorkerTextItems(JsonElement root)
+    {
+        if (!root.TryGetProperty("workers", out var workers) || workers.ValueKind != JsonValueKind.Array)
+        {
+            return 0;
+        }
+
+        var count = 0;
+        foreach (var group in workers.EnumerateArray())
+        {
+            if (group.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var item in group.EnumerateArray())
+            {
+                if (item.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private static IReadOnlyList<string> ReadStringArray(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        return value.EnumerateArray()
+            .Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => item.GetString())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Cast<string>()
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> ReadObjectKeys(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.Object)
+        {
+            return Array.Empty<string>();
+        }
+
+        return value.EnumerateObject()
+            .Select(property => property.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string? ReadString(JsonElement root, string propertyName)
+    {
+        if (!root.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var text = value.GetString();
+        return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
     }
 
 }

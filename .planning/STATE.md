@@ -101,6 +101,7 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - 2026-06-02: PostgreSQL schema bootstrap now uses an explicit SQL migration runner without EF: baseline SQL lives in `Postgres/Migrations/0001_processing_baseline.sql`, migrations are embedded, applied in id order, recorded in `schema_migrations`, and skipped idempotently on later startup.
 - 2026-06-02: Admin UI static assets split shared helper logic out of `wwwroot/admin/app.js` into `formatters.js`, `dom.js`, `http.js`, and `confirm-dialog.js` while keeping the current browser-only static delivery model.
 - 2026-06-02: First-admin bootstrap path added as a separate test WinForms app `CenteralES.Admin.Bootstrap.WinForms`, backed by shared `IAdminBootstrapper`/`PostgresAdminBootstrapper`; it applies SQL migrations, creates the first active admin only when none exist, and writes `bootstrap_admin_user` audit without password/hash/connection string secrets.
+- 2026-06-02: Admin Result Details now includes a safe PDF stamp recognition summary for `pdf_stamp_recognition_results`: worker group/item counts, worker page count/page keys, unrecognized page/error counts, optional `izm_number`, and short error excerpts without returning raw JSON payload or input PDF.
 
 ## Workflow Rules
 
@@ -110,4 +111,4 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-06-02 after first-admin WinForms bootstrap app*
+*Last updated: 2026-06-02 after Admin Result Details summary*

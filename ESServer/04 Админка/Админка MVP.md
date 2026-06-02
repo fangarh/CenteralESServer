@@ -354,7 +354,7 @@ GET /api/admin/results/{resultIndexId}
 /admin -> Results
 ```
 
-Первый экран `Results` показывает read-only result index metadata: resultIndexId, subjectId, jobId, capability, hash, result kind, payload table/id, contract version, payload size, createdAt и связанный job status/attempt. Endpoint-ы требуют admin session cookie, не требуют CSRF, не возвращают raw JSON payload, входной PDF или storage key. Человекочитаемый summary результата и раскрытие raw JSON остаются отдельным checkpoint после фиксации стабильного JSON-контракта.
+Первый экран `Results` показывает read-only result index metadata: resultIndexId, subjectId, jobId, capability, hash, result kind, payload table/id, contract version, payload size, createdAt и связанный job status/attempt. Endpoint-ы требуют admin session cookie, не требуют CSRF, не возвращают raw JSON payload, входной PDF или storage key. Result Details дополнительно показывает безопасный человекочитаемый summary для PDF-result.
 
 ## Result Details
 
@@ -372,6 +372,25 @@ GET /api/admin/results/{resultIndexId}
 Для PDF в MVP основной экран показывает найденных людей, должности и подписантов, если это можно извлечь из существующего JSON-контракта.
 
 Raw JSON показывается отдельно и не должен быть главным экраном.
+
+Текущий checkpoint:
+
+```text
+/admin -> Results -> Детали
+```
+
+Для `pdf_stamp_recognition_results` details endpoint возвращает безопасный summary, построенный из raw JSON payload на сервере:
+
+- количество worker groups;
+- количество распознанных scalar text items в `workers`;
+- количество страниц в `workers_page`;
+- список ключей страниц;
+- количество `unrecognized_pages`;
+- количество `errors`;
+- `izm_number`, если он есть;
+- короткие excerpts ошибок.
+
+Summary не возвращает полный raw JSON payload, входной PDF, storage key, password/hash или другие секреты. Полный raw JSON остаётся отдельной controlled/debug surface на будущее.
 
 ## Экспорт отчёта для поддержки
 

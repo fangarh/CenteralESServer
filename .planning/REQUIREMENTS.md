@@ -55,6 +55,7 @@
 - [x] **ADMIN-03**: Audit фиксирует опасные admin actions.
 - [x] **ADMIN-04**: Admin API отдаёт support report для Job Details без входного PDF, raw secrets и больших payload.
 - [x] **ADMIN-05**: Первый admin может быть создан повторяемым bootstrap tool без Web setup wizard и без вывода секретов.
+- [x] **ADMIN-06**: Admin Result Details показывает безопасный человекочитаемый summary PDF-result без raw payload.
 - [x] **HEALTH-01**: Web предоставляет `/health/live` и `/health/ready`.
 - [x] **HEALTH-02**: Worker пишет heartbeat каждые `30 seconds`, stale threshold `3 minutes`.
 
@@ -116,16 +117,17 @@
 | ADMIN-03 | Phase 2 | Done: manual retry/API key/admin user audit plus filtered Admin Audit UI with safe details |
 | ADMIN-04 | Phase 2 | Done: Backend support report endpoint plus UI download action |
 | ADMIN-05 | Phase 2 | Done: shared `IAdminBootstrapper` plus separate WinForms test bootstrap app |
+| ADMIN-06 | Phase 4 | Done: safe PDF stamp recognition summary in Admin Result Details |
 | HEALTH-01 | Phase 2 | Done: Web endpoints plus Admin UI Health screen |
 | HEALTH-02 | Phase 2 | Done |
 | DEPLOY-01 | Phase 3 | Pending |
 | DEPLOY-02 | Phase 3 | Pending |
 
 **Coverage:**
-- v1 requirements: 34 total
-- Mapped to phases: 34
+- v1 requirements: 35 total
+- Mapped to phases: 35
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-02 after first-admin WinForms bootstrap app*
+*Last updated: 2026-06-02 after Admin Result Details summary*

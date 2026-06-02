@@ -68,7 +68,7 @@ Scope:
 
 - Dashboard как рабочая консоль;
 - Processors/Processor Details;
-- Results/Result Details read-only baseline done; raw JSON summary remains later;
+- Results/Result Details read-only baseline and safe PDF summary done; controlled raw JSON debug surface remains later;
 - API Keys UI;
 - Storage screen read-only baseline done; cleanup/retention actions remain later;
 - Health screen;
@@ -95,4 +95,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-02 after SQL migration runner and Admin UI asset split*
+*Last updated: 2026-06-02 after Admin Result Details summary*

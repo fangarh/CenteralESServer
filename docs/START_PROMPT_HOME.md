@@ -60,6 +60,7 @@ db.env, logon.env, .codex-local/ и test.pdf должны оставаться i
 - Admin users management реализован.
 - Admin Storage read-only реализован.
 - Admin Results read-only реализован.
+- Admin Result Details показывает безопасный PDF summary без raw JSON payload.
 - Admin Settings read-only реализован.
 - Admin Audit UI с фильтрами и safe details реализован.
 - SQL migration runner без EF реализован.
@@ -82,12 +83,12 @@ db.env, logon.env, .codex-local/ и test.pdf должны оставаться i
 - Ожидаемая console error до логина: 401 /api/admin/auth/me.
 
 Следующий логичный шаг без Docker:
-PDF result summary в Admin Result Details.
+Raw JSON controlled debug endpoint или локальный WinForms smoke для bootstrap app.
 
 Зачем:
-- Results/Result Details сейчас показывают metadata без raw payload;
-- прикладному администратору нужен человекочитаемый summary распознавания;
-- raw JSON должен оставаться отдельной controlled/debug surface, не главным экраном.
+- PDF summary уже закрыт безопасными счетчиками и excerpts;
+- если нужен raw JSON, это должен быть отдельный controlled/debug endpoint;
+- WinForms app пока проверен сборкой и тестами, но не интерактивным запуском.
 
 После этого следующий крупный блок:
 Docker Compose Delivery MVP:

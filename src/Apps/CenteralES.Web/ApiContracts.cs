@@ -266,6 +266,32 @@ internal sealed record AdminResultResponse(
     string? JobStatus,
     int? JobAttemptNumber);
 
+internal sealed record AdminResultDetailsResponse(
+    string ResultIndexId,
+    string SubjectId,
+    string JobId,
+    string Capability,
+    string Hash,
+    string ResultKind,
+    string PayloadTable,
+    string PayloadId,
+    string ContractVersion,
+    long PayloadSize,
+    DateTimeOffset CreatedAt,
+    string? JobStatus,
+    int? JobAttemptNumber,
+    AdminPdfStampRecognitionResultSummaryResponse? PdfStampRecognitionSummary);
+
+internal sealed record AdminPdfStampRecognitionResultSummaryResponse(
+    int WorkerGroupCount,
+    int WorkerTextItemCount,
+    int WorkerPageCount,
+    int UnrecognizedPageCount,
+    int ErrorCount,
+    string? IzmNumber,
+    IReadOnlyList<string> PageKeys,
+    IReadOnlyList<string> ErrorExcerpts);
+
 internal sealed record AdminApiKeyListResponse(IReadOnlyList<AdminApiKeyResponse> Keys);
 
 internal sealed record AdminApiKeyResponse(

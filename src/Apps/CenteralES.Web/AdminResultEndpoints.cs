@@ -67,7 +67,7 @@ internal static class AdminResultEndpoints
             var result = await readStore.GetResultAsync(parsedResultIndexId, cancellationToken);
             return result is null
                 ? Results.NotFound(ApiErrorResponse.Create("result_not_found", $"Result '{resultIndexId}' was not found."))
-                : Results.Ok(ApiMappings.ToAdminResultResponse(result));
+                : Results.Ok(ApiMappings.ToAdminResultDetailsResponse(result));
         })
             .WithName("AdminGetResult");
     }

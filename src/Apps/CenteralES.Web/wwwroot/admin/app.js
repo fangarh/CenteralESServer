@@ -9,6 +9,7 @@ const {
   formatDuration,
   formatBool,
   formatBytes,
+  formatList,
   pluralizeRu,
   escapeHtml
 } = window.CenteralESAdminFormatters;
@@ -955,6 +956,29 @@ function renderResultDetails() {
     ["Created", formatDate(result.createdAt)],
     ["Job status", translateStatus(result.jobStatus)],
     ["Attempt", result.jobAttemptNumber ?? "Нет данных"]
+  ]);
+
+  renderResultSummary(result.pdfStampRecognitionSummary);
+}
+
+function renderResultSummary(summary) {
+  if (!summary) {
+    renderDefinitionList("result-details-summary", [
+      ["Summary", "Для этого типа результата summary недоступен."],
+      ["Raw payload", "Не возвращается этим endpoint-ом."]
+    ]);
+    return;
+  }
+
+  renderDefinitionList("result-details-summary", [
+    ["Worker groups", summary.workerGroupCount],
+    ["Recognized text items", summary.workerTextItemCount],
+    ["Pages with workers", formatList(summary.pageKeys)],
+    ["Worker page count", summary.workerPageCount],
+    ["Unrecognized pages", summary.unrecognizedPageCount],
+    ["Errors", summary.errorCount],
+    ["Изм. номер", summary.izmNumber || "Нет данных"],
+    ["Error excerpts", formatList(summary.errorExcerpts)]
   ]);
 }
 

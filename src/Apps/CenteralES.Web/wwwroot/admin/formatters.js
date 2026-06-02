@@ -93,6 +93,14 @@
     return `${size.toFixed(precision)} ${units[unitIndex]}`;
   }
 
+  function formatList(values) {
+    if (!Array.isArray(values) || values.length === 0) {
+      return "Нет данных";
+    }
+
+    return values.join(", ");
+  }
+
   function pluralizeRu(count, one, few, many) {
     const mod10 = count % 10;
     const mod100 = count % 100;
@@ -125,6 +133,7 @@
     formatDuration,
     formatBool,
     formatBytes,
+    formatList,
     pluralizeRu,
     escapeHtml
   };

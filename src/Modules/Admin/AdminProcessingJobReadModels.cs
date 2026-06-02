@@ -128,6 +128,20 @@ public sealed record AdminResultReference(
     ProcessingJobStatus? JobStatus,
     int? JobAttemptNumber);
 
+public sealed record AdminResultDetails(
+    AdminResultReference Reference,
+    AdminPdfStampRecognitionResultSummary? PdfStampRecognitionSummary);
+
+public sealed record AdminPdfStampRecognitionResultSummary(
+    int WorkerGroupCount,
+    int WorkerTextItemCount,
+    int WorkerPageCount,
+    int UnrecognizedPageCount,
+    int ErrorCount,
+    string? IzmNumber,
+    IReadOnlyList<string> PageKeys,
+    IReadOnlyList<string> ErrorExcerpts);
+
 public sealed record AdminProcessorStatus(
     string ProcessorKey,
     string Capability,
@@ -188,5 +202,5 @@ public interface IAdminProcessingReadStore
         AdminResultListQuery query,
         CancellationToken cancellationToken);
 
-    Task<AdminResultReference?> GetResultAsync(Guid resultIndexId, CancellationToken cancellationToken);
+    Task<AdminResultDetails?> GetResultAsync(Guid resultIndexId, CancellationToken cancellationToken);
 }

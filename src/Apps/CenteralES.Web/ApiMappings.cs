@@ -196,6 +196,35 @@ internal static class ApiMappings
             result.JobAttemptNumber);
     }
 
+    public static AdminResultDetailsResponse ToAdminResultDetailsResponse(AdminResultDetails result)
+    {
+        return new AdminResultDetailsResponse(
+            result.Reference.ResultIndexId.ToString("N"),
+            result.Reference.SubjectId.ToString("N"),
+            result.Reference.JobId.ToString("N"),
+            result.Reference.Capability,
+            result.Reference.ContentHash,
+            result.Reference.ResultKind,
+            result.Reference.PayloadTable,
+            result.Reference.PayloadId.ToString("N"),
+            result.Reference.ContractVersion,
+            result.Reference.PayloadSize,
+            result.Reference.CreatedAt,
+            result.Reference.JobStatus is null ? null : ToPublicStatus(result.Reference.JobStatus.Value),
+            result.Reference.JobAttemptNumber,
+            result.PdfStampRecognitionSummary is null
+                ? null
+                : new AdminPdfStampRecognitionResultSummaryResponse(
+                    result.PdfStampRecognitionSummary.WorkerGroupCount,
+                    result.PdfStampRecognitionSummary.WorkerTextItemCount,
+                    result.PdfStampRecognitionSummary.WorkerPageCount,
+                    result.PdfStampRecognitionSummary.UnrecognizedPageCount,
+                    result.PdfStampRecognitionSummary.ErrorCount,
+                    result.PdfStampRecognitionSummary.IzmNumber,
+                    result.PdfStampRecognitionSummary.PageKeys,
+                    result.PdfStampRecognitionSummary.ErrorExcerpts));
+    }
+
     public static AdminApiKeyResponse ToAdminApiKeyResponse(AdminApiKeyListItem key)
     {
         return new AdminApiKeyResponse(
