@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Centeral ES Admin</title>
-  <link rel="stylesheet" href="/admin/app.css?v=20260602-3">
+  <link rel="stylesheet" href="/admin/app.css?v=20260602-4">
 </head>
 <body>
   <div class="app-shell">
@@ -19,6 +19,7 @@
       <nav class="nav">
         <button class="nav-item is-active" type="button" data-tab="overview">Сводка</button>
         <button class="nav-item" type="button" data-tab="jobs">Задачи</button>
+        <button class="nav-item" type="button" data-tab="processors">Обработчик</button>
         <button class="nav-item" type="button" data-tab="apiKeys">Ключи API</button>
         <button class="nav-item" type="button" data-tab="users">Администраторы</button>
         <button class="nav-item" type="button" data-tab="audit">Аудит</button>
@@ -156,6 +157,89 @@
           </div>
         </section>
 
+        <section id="processors-tab" class="tab-panel" hidden>
+          <div class="section-band">
+            <div class="section-header">
+              <div>
+                <h2>PDF обработчик</h2>
+                <p>Пассивное состояние `pdf2txt-http-recognizer`: очередь, workers и последние diagnostics без вызова внешнего сервиса.</p>
+              </div>
+              <button id="refresh-processor-button" class="secondary-button" type="button">Обновить обработчик</button>
+            </div>
+            <div class="summary-grid processor-summary">
+              <div class="summary-tile">
+                <span class="tile-label">Состояние</span>
+                <strong id="processor-details-health">Нет данных</strong>
+                <span id="processor-details-key">pdf2txt-http-recognizer</span>
+              </div>
+              <div class="summary-tile">
+                <span class="tile-label">Очередь</span>
+                <strong id="processor-details-queued">0</strong>
+                <span>queued</span>
+              </div>
+              <div class="summary-tile">
+                <span class="tile-label">В работе</span>
+                <strong id="processor-details-processing">0</strong>
+                <span>processing</span>
+              </div>
+              <div class="summary-tile">
+                <span class="tile-label">Требуют реакции</span>
+                <strong id="processor-details-problem-count">0</strong>
+                <span>failed + blocked</span>
+              </div>
+            </div>
+            <div class="details-grid">
+              <div class="detail-block">
+                <h3>Queue counts</h3>
+                <dl id="processor-queue-list" class="kv-list"></dl>
+              </div>
+              <div class="detail-block">
+                <h3>Граница MVP</h3>
+                <div class="report-summary">
+                  <div>Админка показывает пассивное состояние обработчика.</div>
+                  <div>Проверка работоспособности не отправляет пользовательский PDF.</div>
+                  <div>Редактирование endpoint pool и concurrency limits будет отдельным backend/UI checkpoint.</div>
+                </div>
+              </div>
+            </div>
+            <div class="detail-block">
+              <h3>Workers</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Worker</th>
+                      <th>Старт</th>
+                      <th>Heartbeat</th>
+                      <th>Состояние</th>
+                    </tr>
+                  </thead>
+                  <tbody id="processor-workers-body"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="detail-block">
+              <h3>Recent diagnostics</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Задача</th>
+                      <th>Попытка</th>
+                      <th>Статус</th>
+                      <th>Endpoint</th>
+                      <th>HTTP</th>
+                      <th>Ошибка</th>
+                      <th>Correlation</th>
+                    </tr>
+                  </thead>
+                  <tbody id="processor-diagnostics-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="apiKeys-tab" class="tab-panel" hidden>
           <div class="section-band">
             <div class="section-header">
@@ -271,6 +355,6 @@
     </form>
   </dialog>
 
-  <script src="/admin/app.js?v=20260602-3"></script>
+  <script src="/admin/app.js?v=20260602-4"></script>
 </body>
 </html>

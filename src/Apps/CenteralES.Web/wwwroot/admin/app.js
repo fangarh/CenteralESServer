@@ -14,6 +14,7 @@ const state = {
 const titles = {
   overview: ["Сводка", "Состояние очереди, обработчика и действий, которые требуют внимания."],
   jobs: ["Задачи", "Упавшие задачи и ручной retry."],
+  processors: ["Обработчик", "Пассивное состояние PDF-обработчика, очередь, workers и diagnostics."],
   apiKeys: ["Ключи API", "Доступ клиента ЭП к публичному API."],
   users: ["Администраторы", "Учетные записи, пароли и отключение доступа."],
   audit: ["Аудит", "Журнал опасных admin-действий."]
@@ -87,6 +88,12 @@ function bindForms() {
 
 function bindSessionActions() {
   document.getElementById("refresh-button").addEventListener("click", refreshData);
+  document.getElementById("refresh-processor-button").addEventListener("click", async () => {
+    await loadProcessor();
+    renderProcessorDetails();
+    renderOverview();
+    showAlert("Состояние обработчика обновлено.");
+  });
   document.getElementById("logout-button").addEventListener("click", logout);
   document.getElementById("retry-detail-button").addEventListener("click", () => {
     if (state.selectedJobDetails) {
@@ -196,6 +203,7 @@ function renderAll() {
   renderUsers();
   renderAudit();
   renderJobDetails();
+  renderProcessorDetails();
 }
 
 function renderOverview() {
@@ -257,6 +265,72 @@ function renderJobs() {
     button.style.marginLeft = "8px";
     button.addEventListener("click", () => retryJob(job));
     row.lastElementChild.appendChild(button);
+    body.appendChild(row);
+  });
+}
+
+function renderProcessorDetails() {
+  const processor = state.processor;
+  const queue = processor?.queue || {};
+
+  setText("processor-details-health", translateHealth(processor?.health));
+  setText("processor-details-key", processor?.processorKey || "pdf2txt-http-recognizer");
+  setText("processor-details-queued", queue.queued ?? 0);
+  setText("processor-details-processing", queue.processing ?? 0);
+  setText("processor-details-problem-count", (queue.failed ?? 0) + (queue.blocked ?? 0));
+
+  renderDefinitionList("processor-queue-list", [
+    ["Queued", queue.queued ?? 0],
+    ["Processing", queue.processing ?? 0],
+    ["Completed", queue.completed ?? 0],
+    ["Failed", queue.failed ?? 0],
+    ["Blocked", queue.blocked ?? 0],
+    ["Cancelled", queue.cancelled ?? 0]
+  ]);
+
+  renderProcessorWorkers(processor?.workers || []);
+  renderProcessorDiagnostics(processor?.recentDiagnostics || []);
+}
+
+function renderProcessorWorkers(workers) {
+  const body = document.getElementById("processor-workers-body");
+  body.innerHTML = "";
+  if (workers.length === 0) {
+    appendEmptyRow(body, 4, "Активные worker heartbeat не найдены.");
+    return;
+  }
+
+  workers.forEach(worker => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td><span class="mono">${escapeHtml(worker.workerId)}</span></td>
+      <td>${formatDate(worker.startedAt)}</td>
+      <td>${formatDate(worker.heartbeatAt)}</td>
+      <td>${worker.stale ? statusPill("stale") : statusPill("active")}</td>
+    `;
+    body.appendChild(row);
+  });
+}
+
+function renderProcessorDiagnostics(diagnostics) {
+  const body = document.getElementById("processor-diagnostics-body");
+  body.innerHTML = "";
+  if (diagnostics.length === 0) {
+    appendEmptyRow(body, 7, "Recent diagnostics пусты.");
+    return;
+  }
+
+  diagnostics.forEach(diagnostic => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td><span class="mono">${escapeHtml(diagnostic.jobId)}</span></td>
+      <td>${diagnostic.attemptNumber}</td>
+      <td>${statusPill(diagnostic.status)}</td>
+      <td>${escapeHtml(diagnostic.endpoint || "Не выбран")}</td>
+      <td>${diagnostic.httpStatus ?? "Нет данных"}</td>
+      <td>${escapeHtml(diagnostic.normalizedError || "Нет данных")}</td>
+      <td><span class="mono">${escapeHtml(diagnostic.correlationId || "Нет данных")}</span></td>
+    `;
     body.appendChild(row);
   });
 }
@@ -731,6 +805,7 @@ function translateStatus(status) {
     disabled: "Отключен",
     failed: "Ошибка",
     blocked: "Заблокирована",
+    stale: "Нет heartbeat",
     completed: "Готово",
     processing: "В работе",
     queued: "В очереди",

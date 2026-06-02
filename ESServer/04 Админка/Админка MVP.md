@@ -174,6 +174,14 @@ Endpoint показывает passive status для processor-а без акти
 
 Runtime-параметры компонента управляются на странице компонента, рядом с состоянием, health, последними ошибками, связанными задачами и audit изменений.
 
+Текущий UI checkpoint:
+
+```text
+/admin -> Обработчик
+```
+
+Первый экран Processor Details показывает passive health для `pdf2txt-http-recognizer`, queue counts, worker heartbeats и recent diagnostics. Редактирование endpoint pool, retry policy и concurrency limits пока не включено в UI, потому что для этого нужен отдельный backend checkpoint с audit, подтверждением и валидацией влияния на новые задачи.
+
 Опасные изменения требуют подтверждения:
 
 ```text

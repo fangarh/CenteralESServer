@@ -91,6 +91,7 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - 2026-06-02: Admin user management backend added: `GET /api/admin/users`, `POST /api/admin/users`, `POST /api/admin/users/{userId}/disable`, and `POST /api/admin/users/{userId}/password`; state changes require CSRF, never return password/hash, and write safe audit events.
 - 2026-06-02: First Admin UI shell added at `/admin`: login, overview, failed/blocked jobs with single-job retry, processor passive health summary, API key create/disable, admin user create/password/disable, and audit list; UI is served by Web static assets without Node/Docker.
 - 2026-06-02: Admin UI Job Details added: failed/blocked jobs can open details with identifiers, timestamps, diagnostics, attempt history, single-job retry, and downloadable support report JSON.
+- 2026-06-02: Admin UI Processor Details added for `pdf2txt-http-recognizer`: passive health, queue counts, worker heartbeats, recent diagnostics, and explicit MVP boundary for future endpoint/concurrency editing.
 
 ## Workflow Rules
 
@@ -100,4 +101,4 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-06-02 after Admin UI Job Details checkpoint*
+*Last updated: 2026-06-02 after Admin UI Processor Details checkpoint*
