@@ -258,6 +258,147 @@ public sealed class PostgresProcessingJobQueueTests
     }
 
     [Fact]
+    public async Task Queue_and_result_lookup_resolve_content_hash_aliases()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var resultStore = new PostgresPdfStampRecognitionResultStore(dataSource);
+        var sha256Hash = $"sha256:{Guid.NewGuid():N}";
+        var gostHash = $"gost-r-34.11-2012-256:{Guid.NewGuid():N}";
+        var command = new CreateProcessingJobCommand(
+            PdfStampRecognitionConstants.Capability,
+            sha256Hash,
+            $"temp/{Guid.NewGuid():N}.pdf",
+            DateTimeOffset.UtcNow,
+            [
+                new ProcessingContentHash("sha256", sha256Hash),
+                new ProcessingContentHash("gost-r-34.11-2012-256", gostHash)
+            ]);
+
+        var enqueued = await queue.EnqueueAsync(command, CancellationToken.None);
+        var activeByAlias = await queue.GetCurrentByHashAsync(
+            PdfStampRecognitionConstants.Capability,
+            gostHash,
+            CancellationToken.None);
+        var claimed = await queue.ClaimNextAsync(DateTimeOffset.UtcNow.AddSeconds(1), CancellationToken.None);
+
+        Assert.NotNull(activeByAlias);
+        Assert.Equal(enqueued.JobId, activeByAlias.JobId);
+        Assert.NotNull(claimed);
+
+        var saved = await resultStore.SaveAsync(
+            new SavePdfStampRecognitionResultCommand(
+                claimed.SubjectId,
+                claimed.JobId,
+                claimed.ContentHash,
+                """{"source":"alias-test"}""",
+                "test-v1",
+                DateTimeOffset.UtcNow),
+            CancellationToken.None);
+
+        await queue.CompleteAsync(
+            new CompleteProcessingJobCommand(
+                claimed.JobId,
+                claimed.SubjectId,
+                saved.ResultIndexId,
+                new AttemptDiagnostics(
+                    Endpoint: "fake://test",
+                    Duration: TimeSpan.FromMilliseconds(10),
+                    HttpStatus: 200,
+                    NormalizedError: null,
+                    Retryable: null,
+                    CorrelationId: Guid.NewGuid().ToString("N")),
+                DateTimeOffset.UtcNow),
+            CancellationToken.None);
+
+        var loadedByAlias = await resultStore.GetByHashAsync(gostHash, CancellationToken.None);
+
+        Assert.NotNull(loadedByAlias);
+        Assert.Equal(saved.ResultIndexId, loadedByAlias.ResultIndexId);
+        Assert.Equal(sha256Hash, loadedByAlias.ContentHash);
+        Assert.Contains("alias-test", loadedByAlias.PayloadJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Result_store_replaces_previous_payload_for_same_hash()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var resultStore = new PostgresPdfStampRecognitionResultStore(dataSource);
+        var command = new CreateProcessingJobCommand(
+            PdfStampRecognitionConstants.Capability,
+            $"sha256:{Guid.NewGuid():N}",
+            $"temp/{Guid.NewGuid():N}.pdf",
+            DateTimeOffset.UtcNow);
+
+        await queue.EnqueueAsync(command, CancellationToken.None);
+        var claimed = await queue.ClaimNextAsync(DateTimeOffset.UtcNow.AddSeconds(1), CancellationToken.None);
+
+        Assert.NotNull(claimed);
+
+        var first = await resultStore.SaveAsync(
+            new SavePdfStampRecognitionResultCommand(
+                claimed.SubjectId,
+                claimed.JobId,
+                claimed.ContentHash,
+                """{"source":"first"}""",
+                "test-v1",
+                DateTimeOffset.UtcNow),
+            CancellationToken.None);
+        var second = await resultStore.SaveAsync(
+            new SavePdfStampRecognitionResultCommand(
+                claimed.SubjectId,
+                claimed.JobId,
+                claimed.ContentHash,
+                """{"source":"second"}""",
+                "test-v1",
+                DateTimeOffset.UtcNow.AddSeconds(1)),
+            CancellationToken.None);
+        var loaded = await resultStore.GetByHashAsync(command.ContentHash, CancellationToken.None);
+
+        await using var connection = await dataSource.OpenConnectionAsync(CancellationToken.None);
+        await using var countPayloads = new NpgsqlCommand("""
+            select count(*)::int
+            from pdf_stamp_recognition_results
+            where result_index_id = @result_index_id;
+            """, connection);
+        countPayloads.Parameters.AddWithValue("result_index_id", second.ResultIndexId);
+        var payloadCount = Convert.ToInt32(await countPayloads.ExecuteScalarAsync(CancellationToken.None));
+
+        Assert.Equal(first.ResultIndexId, second.ResultIndexId);
+        Assert.NotEqual(first.PayloadId, second.PayloadId);
+        Assert.NotNull(loaded);
+        Assert.Equal(second.PayloadId, loaded.PayloadId);
+        Assert.Contains("second", loaded.PayloadJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("first", loaded.PayloadJson, StringComparison.Ordinal);
+        Assert.Equal(1, payloadCount);
+    }
+
+    [Fact]
     public async Task Support_report_includes_result_index_reference_without_payload()
     {
         var connectionString = IntegrationTestDatabase.TryReadConnectionString();
@@ -275,7 +416,7 @@ public sealed class PostgresProcessingJobQueueTests
 
         var queue = new PostgresProcessingJobQueue(dataSource);
         var resultStore = new PostgresPdfStampRecognitionResultStore(dataSource);
-        var adminStore = new PostgresAdminProcessingReadStore(dataSource);
+        var adminStore = new PostgresAdminJobReadStore(dataSource, new PostgresAdminProcessorReadStore(dataSource));
         var command = new CreateProcessingJobCommand(
             PdfStampRecognitionConstants.Capability,
             $"sha256:{Guid.NewGuid():N}",
@@ -345,7 +486,7 @@ public sealed class PostgresProcessingJobQueueTests
 
         var queue = new PostgresProcessingJobQueue(dataSource);
         var resultStore = new PostgresPdfStampRecognitionResultStore(dataSource);
-        var adminStore = new PostgresAdminProcessingReadStore(dataSource);
+        var adminStore = new PostgresAdminResultReadStore(dataSource);
         var command = new CreateProcessingJobCommand(
             PdfStampRecognitionConstants.Capability,
             $"sha256:{Guid.NewGuid():N}",
@@ -471,7 +612,7 @@ public sealed class PostgresProcessingJobQueueTests
 
         var now = DateTimeOffset.UtcNow;
         var queue = new PostgresProcessingJobQueue(dataSource);
-        var adminStore = new PostgresAdminProcessingReadStore(dataSource);
+        var adminStore = new PostgresAdminJobReadStore(dataSource, new PostgresAdminProcessorReadStore(dataSource));
         var command = new CreateProcessingJobCommand(
             PdfStampRecognitionConstants.Capability,
             $"sha256:{Guid.NewGuid():N}",
@@ -494,6 +635,154 @@ public sealed class PostgresProcessingJobQueueTests
         Assert.Equal(ProcessingJobStatus.Processing, details.Status);
         Assert.NotNull(details.HeartbeatAt);
         Assert.Equal(heartbeatAt.ToUnixTimeMilliseconds(), details.HeartbeatAt.Value.ToUnixTimeMilliseconds());
+    }
+
+    [Fact]
+    public async Task Stale_processing_job_is_recovered_to_queue_and_claimed_again_without_new_attempt()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var now = DateTimeOffset.UtcNow;
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var command = new CreateProcessingJobCommand(
+            PdfStampRecognitionConstants.Capability,
+            $"sha256:{Guid.NewGuid():N}",
+            $"temp/{Guid.NewGuid():N}.pdf",
+            now);
+
+        var enqueued = await queue.EnqueueAsync(command, CancellationToken.None);
+        var claimed = await queue.ClaimNextAsync(now.AddSeconds(1), CancellationToken.None);
+
+        Assert.NotNull(claimed);
+
+        var activeRecovery = await queue.RecoverStaleProcessingJobsAsync(
+            new RecoverStaleProcessingJobsCommand(
+                PdfStampRecognitionConstants.Capability,
+                now,
+                now.AddSeconds(2),
+                Limit: 10),
+            CancellationToken.None);
+        var staleRecovery = await queue.RecoverStaleProcessingJobsAsync(
+            new RecoverStaleProcessingJobsCommand(
+                PdfStampRecognitionConstants.Capability,
+                now.AddMinutes(10),
+                now.AddMinutes(10),
+                Limit: 10),
+            CancellationToken.None);
+        var recoveredClaim = await queue.ClaimNextAsync(now.AddMinutes(10).AddSeconds(1), CancellationToken.None);
+
+        Assert.Equal(0, activeRecovery);
+        Assert.Equal(1, staleRecovery);
+        Assert.NotNull(recoveredClaim);
+        Assert.Equal(enqueued.JobId, recoveredClaim.JobId);
+        Assert.Equal(claimed.AttemptNumber, recoveredClaim.AttemptNumber);
+        Assert.Equal(claimed.TemporaryFileKey, recoveredClaim.TemporaryFileKey);
+    }
+
+    [Fact]
+    public async Task Complete_rejects_job_that_is_not_processing()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var now = DateTimeOffset.UtcNow;
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var enqueued = await queue.EnqueueAsync(
+            new CreateProcessingJobCommand(
+                PdfStampRecognitionConstants.Capability,
+                $"sha256:{Guid.NewGuid():N}",
+                $"temp/{Guid.NewGuid():N}.pdf",
+                now),
+            CancellationToken.None);
+
+        var claimed = await queue.ClaimNextAsync(now.AddSeconds(1), CancellationToken.None);
+        Assert.NotNull(claimed);
+
+        var complete = new CompleteProcessingJobCommand(
+            claimed.JobId,
+            claimed.SubjectId,
+            Guid.NewGuid(),
+            new AttemptDiagnostics(
+                Endpoint: "https://pdf2txt.local/recognize_json/",
+                Duration: TimeSpan.FromSeconds(1),
+                HttpStatus: 200,
+                NormalizedError: null,
+                Retryable: null,
+                CorrelationId: "corr-complete-once"),
+            now.AddSeconds(2));
+
+        await queue.CompleteAsync(complete, CancellationToken.None);
+
+        var repeat = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            queue.CompleteAsync(complete with { FinishedAt = now.AddSeconds(3) }, CancellationToken.None));
+        Assert.Contains(enqueued.JobId.ToString(), repeat.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Fail_rejects_queued_job_that_was_not_claimed()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var now = DateTimeOffset.UtcNow;
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var enqueued = await queue.EnqueueAsync(
+            new CreateProcessingJobCommand(
+                PdfStampRecognitionConstants.Capability,
+                $"sha256:{Guid.NewGuid():N}",
+                $"temp/{Guid.NewGuid():N}.pdf",
+                now),
+            CancellationToken.None);
+
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            queue.FailAsync(
+                new FailProcessingJobCommand(
+                    enqueued.JobId,
+                    enqueued.SubjectId,
+                    NormalizedProcessorError.ProcessorTimeout,
+                    Final: false,
+                    new AttemptDiagnostics(
+                        Endpoint: "https://pdf2txt.local/recognize_json/",
+                        Duration: TimeSpan.FromSeconds(1),
+                        HttpStatus: 504,
+                        NormalizedError: NormalizedProcessorError.ProcessorTimeout,
+                        Retryable: true,
+                        CorrelationId: "corr-fail-queued",
+                        RawErrorExcerpt: "timeout"),
+                    now.AddSeconds(2)),
+                CancellationToken.None));
+        Assert.Contains(enqueued.JobId.ToString(), failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -692,7 +981,7 @@ public sealed class PostgresProcessingJobQueueTests
         var workerId = $"integration-worker-{Guid.NewGuid():N}";
         var now = DateTimeOffset.UtcNow;
         var heartbeatStore = new PostgresWorkerHeartbeatStore(dataSource);
-        var adminStore = new PostgresAdminProcessingReadStore(dataSource);
+        var adminStore = new PostgresAdminProcessorReadStore(dataSource);
 
         await heartbeatStore.HeartbeatAsync(
             new HeartbeatWorkerCommand(

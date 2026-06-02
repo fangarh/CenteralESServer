@@ -75,7 +75,7 @@ internal static class ApiMappings
             job.SubjectId.ToString("N"),
             job.Capability,
             job.ContentHash,
-            job.TemporaryFileKey,
+            !ProcessingInputRetentionPolicy.ShouldDeleteTemporaryInputAfterTerminalState(job.Status),
             job.AttemptNumber,
             ToPublicStatus(job.Status),
             job.ScheduledAt,
@@ -272,6 +272,7 @@ internal static class ApiMappings
             new AdminProcessorQueueCountsResponse(
                 status.Queue.Queued,
                 status.Queue.Processing,
+                status.Queue.StaleProcessing,
                 status.Queue.Completed,
                 status.Queue.Failed,
                 status.Queue.Blocked,

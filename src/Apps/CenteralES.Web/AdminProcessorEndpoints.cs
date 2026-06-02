@@ -10,7 +10,7 @@ internal static class AdminProcessorEndpoints
             string processorKey,
             HttpRequest request,
             IAdminAuthenticator adminAuthenticator,
-            IAdminProcessingReadStore readStore,
+            IAdminProcessorReadStore readStore,
             CancellationToken cancellationToken) =>
         {
             var authorization = await ApiAuthorization.AuthorizeAdminApiAsync(

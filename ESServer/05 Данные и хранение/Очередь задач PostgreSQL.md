@@ -158,9 +158,26 @@ stale heartbeat threshold: 3 minutes
 
 Если heartbeat давно не обновлялся:
 
-- job считается abandoned;
-- orchestrator решает, можно ли retry;
-- админка показывает проблему.
+- job считается stale;
+- Worker recovery периодически возвращает такую job из `processing` в `queued`;
+- `attempt_number` не меняется, новая attempt не создаётся;
+- `started_at` и `heartbeat_at` очищаются;
+- `scheduled_at` выставляется в момент recovery, чтобы job могла быть забрана снова;
+- recovery применяет current-subject guard: восстанавливается только job, которая всё ещё является `processing_subjects.current_job_id`;
+- SQL использует `FOR UPDATE SKIP LOCKED`, чтобы несколько worker-ов не восстанавливали одну строку одновременно.
+
+MVP defaults:
+
+```text
+job heartbeat interval: 30 seconds
+stale job timeout: 5 minutes
+recovery interval: 1 minute
+recovery batch size: 50
+```
+
+Recovery не пишет failed diagnostics и не переводит job в `blocked`, потому что stale processing обычно означает падение/остановку Worker-а, а не ошибку внешнего processor-а.
+
+Admin Processor status показывает пассивный счётчик `staleProcessing`: количество `processing` jobs, у которых `coalesce(heartbeat_at, started_at, updated_at)` старше recovery timeout. Этот счётчик нужен для видимости recovery риска и не является отдельным status в таблице.
 
 Если все endpoint-ы processor pool заняты по concurrency limit, это не считается failed attempt. Job остаётся в очереди или получает короткий `scheduled_at` delay:
 
@@ -205,7 +222,27 @@ Web и Worker не выполняют schema SQL напрямую. Точка в
 PostgresDatabaseBootstrapper.ApplySchemaAsync
 ```
 
-Это сохраняет текущий startup/bootstrap contract и дает точку расширения для следующих миграций без EF.
+Runtime auto-bootstrap теперь включается политикой окружения:
+
+- в `Development` Web/Worker могут создать target database и применить SQL migrations автоматически;
+- вне `Development` auto-bootstrap выключен по умолчанию и включается только явным `Database:AutoBootstrap=true`;
+- production/Docker path выполняет отдельный bootstrap/migration шаг через `CenteralES.DatabaseMigrator`; runtime auto-bootstrap для Web/Worker не требуется.
+
+Это сохраняет локальный startup/bootstrap contract и дает точку расширения для следующих миграций без EF, но не требует `CREATE DATABASE` прав от production runtime по умолчанию.
+
+Production migration command:
+
+```powershell
+dotnet run --project src/Apps/CenteralES.DatabaseMigrator -- --connection-string "<postgres connection string>"
+```
+
+Если target database уже создана отдельным DBA/init-container шагом:
+
+```powershell
+dotnet run --project src/Apps/CenteralES.DatabaseMigrator -- --connection-string "<postgres connection string>" --no-create-database
+```
+
+CLI не выводит connection string. При отсутствии `--connection-string` используется `CENTERALES_PROCESSING_DATABASE`, а для локальной разработки допускается resolver через ignored `db.env`.
 
 ## Будущая замена
 

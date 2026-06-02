@@ -16,7 +16,7 @@ internal static class AdminResultEndpoints
             int? limit,
             HttpRequest request,
             IAdminAuthenticator adminAuthenticator,
-            IAdminProcessingReadStore readStore,
+            IAdminResultReadStore readStore,
             CancellationToken cancellationToken) =>
         {
             var authorization = await ApiAuthorization.AuthorizeAdminApiAsync(
@@ -50,7 +50,7 @@ internal static class AdminResultEndpoints
             string resultIndexId,
             HttpRequest request,
             IAdminAuthenticator adminAuthenticator,
-            IAdminProcessingReadStore readStore,
+            IAdminResultReadStore readStore,
             CancellationToken cancellationToken) =>
         {
             var authorization = await ApiAuthorization.AuthorizeAdminApiAsync(
@@ -79,7 +79,7 @@ internal static class AdminResultEndpoints
             string resultIndexId,
             HttpRequest request,
             IAdminAuthenticator adminAuthenticator,
-            IAdminProcessingReadStore readStore,
+            IAdminResultReadStore readStore,
             CancellationToken cancellationToken) =>
         {
             var authorization = await ApiAuthorization.AuthorizeAdminApiAsync(

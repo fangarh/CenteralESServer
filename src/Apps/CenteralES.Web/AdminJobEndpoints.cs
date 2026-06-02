@@ -13,7 +13,7 @@ internal static class AdminJobEndpoints
             int? limit,
             HttpRequest request,
             IAdminAuthenticator adminAuthenticator,
-            IAdminProcessingReadStore readStore,
+            IAdminJobReadStore readStore,
             CancellationToken cancellationToken) =>
         {
             var authorization = await ApiAuthorization.AuthorizeAdminApiAsync(
@@ -47,7 +47,7 @@ internal static class AdminJobEndpoints
             string jobId,
             HttpRequest request,
             IAdminAuthenticator adminAuthenticator,
-            IAdminProcessingReadStore readStore,
+            IAdminJobReadStore readStore,
             CancellationToken cancellationToken) =>
         {
             var authorization = await ApiAuthorization.AuthorizeAdminApiAsync(
@@ -76,7 +76,7 @@ internal static class AdminJobEndpoints
             string jobId,
             HttpRequest request,
             IAdminAuthenticator adminAuthenticator,
-            IAdminProcessingReadStore readStore,
+            IAdminJobReadStore readStore,
             CancellationToken cancellationToken) =>
         {
             var authorization = await ApiAuthorization.AuthorizeAdminApiAsync(

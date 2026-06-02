@@ -498,11 +498,12 @@ function renderProcessorDetails() {
   setText("processor-details-key", processor?.processorKey || "pdf2txt-http-recognizer");
   setText("processor-details-queued", queue.queued ?? 0);
   setText("processor-details-processing", queue.processing ?? 0);
-  setText("processor-details-problem-count", (queue.failed ?? 0) + (queue.blocked ?? 0));
+  setText("processor-details-problem-count", (queue.failed ?? 0) + (queue.blocked ?? 0) + (queue.staleProcessing ?? 0));
 
   renderDefinitionList("processor-queue-list", [
     ["Queued", queue.queued ?? 0],
     ["Processing", queue.processing ?? 0],
+    ["Stale processing", queue.staleProcessing ?? 0],
     ["Completed", queue.completed ?? 0],
     ["Failed", queue.failed ?? 0],
     ["Blocked", queue.blocked ?? 0],
@@ -893,7 +894,7 @@ function renderJobDetails() {
       ["Job ID", job.jobId],
       ["Subject ID", job.subjectId],
       ["Hash", job.hash],
-      ["Temporary file", job.temporaryFileKey]
+      ["Input retained", formatBool(job.inputRetained)]
     ]),
     detailBlock("Время", [
       ["Создана", formatDate(job.createdAt)],
@@ -911,7 +912,7 @@ function renderJobDetails() {
     ["Normalized error", job.diagnostics?.normalizedError || "Нет данных"],
     ["Retryable", formatBool(job.diagnostics?.retryable)],
     ["Correlation ID", job.diagnostics?.correlationId || "Нет данных"],
-    ["Excerpt", job.diagnostics?.rawErrorExcerpt || "Нет данных"]
+    ["Excerpt", job.diagnostics?.excerpt || "Нет данных"]
   ]);
 
   renderSupportReportSummary(report);

@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\src\Modules\Storage\CenteralES.Storage.csproj" />
     <ProjectReference Include="..\..\src\Shared\CenteralES.Infrastructure\CenteralES.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Apps\CenteralES.Worker\CenteralES.Worker.csproj" />
+    <ProjectReference Include="..\..\src\Apps\CenteralES.DatabaseMigrator\CenteralES.DatabaseMigrator.csproj" />
   </ItemGroup>
 
 </Project>

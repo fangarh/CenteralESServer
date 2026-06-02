@@ -25,6 +25,7 @@ public sealed class PostgresPdfStampRecognitionResultStore : IPdfStampRecognitio
 
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var previousPayloadId = await ReadCurrentPayloadIdAsync(connection, transaction, command.ContentHash, cancellationToken);
 
         await using var insertIndex = new NpgsqlCommand("""
             insert into processing_result_index (
@@ -94,6 +95,11 @@ public sealed class PostgresPdfStampRecognitionResultStore : IPdfStampRecognitio
         insertPayload.Parameters.AddWithValue("created_at", command.CreatedAt);
         await insertPayload.ExecuteNonQueryAsync(cancellationToken);
 
+        if (previousPayloadId is not null && previousPayloadId.Value != payloadId)
+        {
+            await DeletePayloadAsync(connection, transaction, previousPayloadId.Value, cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
 
         return new PdfStampRecognitionResult(
@@ -124,8 +130,9 @@ public sealed class PostgresPdfStampRecognitionResultStore : IPdfStampRecognitio
                 i.created_at
             from processing_result_index i
             join pdf_stamp_recognition_results p on p.id = i.payload_id
+            left join processing_content_hashes h on h.subject_id = i.subject_id
             where i.capability = @capability
-              and i.content_hash = @content_hash;
+              and (i.content_hash = @content_hash or h.hash_value = @content_hash);
             """, connection);
         command.Parameters.AddWithValue("capability", PdfStampRecognitionConstants.Capability);
         command.Parameters.AddWithValue("content_hash", contentHash);
@@ -146,5 +153,40 @@ public sealed class PostgresPdfStampRecognitionResultStore : IPdfStampRecognitio
             reader.GetString(6),
             reader.GetInt64(7),
             reader.GetFieldValue<DateTimeOffset>(8));
+    }
+
+    private static async Task<Guid?> ReadCurrentPayloadIdAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        string contentHash,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new NpgsqlCommand("""
+            select payload_id
+            from processing_result_index
+            where capability = @capability
+              and content_hash = @content_hash
+            for update;
+            """, connection, transaction);
+        command.Parameters.AddWithValue("capability", PdfStampRecognitionConstants.Capability);
+        command.Parameters.AddWithValue("content_hash", contentHash);
+
+        var value = await command.ExecuteScalarAsync(cancellationToken);
+        return value is null || value is DBNull ? null : (Guid)value;
+    }
+
+    private static async Task DeletePayloadAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid payloadId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new NpgsqlCommand("""
+            delete from pdf_stamp_recognition_results
+            where id = @payload_id;
+            """, connection, transaction);
+        command.Parameters.AddWithValue("payload_id", payloadId);
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 }

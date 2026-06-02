@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using CenteralES.AccessControl;
@@ -611,6 +612,55 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task Create_pdf_job_accepts_gost_hash_algorithm_parameter()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = await CreateAuthorizedClientAsync(_factory);
+        var bytes = Encoding.UTF8.GetBytes($"%PDF-1.7 gost hash {Guid.NewGuid():N}");
+        using var content = new MultipartFormDataContent();
+        using var file = new ByteArrayContent(bytes);
+        content.Add(file, "file", "gost.pdf");
+        content.Add(new StringContent("gost-r-34.11-2012-256"), "hashAlgorithm");
+
+        var response = await client.PostAsync("/api/pdf-stamp-recognition/jobs", content);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var sha256Hash = $"sha256:{Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()}";
+        var bySha256 = await client.GetAsync($"/api/pdf-stamp-recognition/results/{Uri.EscapeDataString(sha256Hash)}");
+        var bySha256Payload = await bySha256.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.Equal("queued", payload.GetProperty("status").GetString());
+        Assert.StartsWith("gost-r-34.11-2012-256:", payload.GetProperty("hash").GetString());
+        Assert.Equal(HttpStatusCode.Accepted, bySha256.StatusCode);
+        Assert.StartsWith("gost-r-34.11-2012-256:", bySha256Payload.GetProperty("hash").GetString());
+    }
+
+    [Fact]
+    public async Task Create_pdf_job_rejects_unknown_hash_algorithm_parameter()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = await CreateAuthorizedClientAsync(_factory);
+        using var content = new MultipartFormDataContent();
+        using var file = new ByteArrayContent(Encoding.UTF8.GetBytes($"%PDF-1.7 bad hash {Guid.NewGuid():N}"));
+        content.Add(file, "file", "bad-hash.pdf");
+
+        var response = await client.PostAsync("/api/pdf-stamp-recognition/jobs?hashAlgorithm=md5", content);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("invalid_input", payload.GetProperty("error").GetProperty("code").GetString());
+        Assert.Contains("not supported", payload.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Create_pdf_job_rejects_file_larger_than_configured_limit()
     {
         if (!HasConfiguredTestDatabase())
@@ -848,7 +898,10 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         Assert.Equal(jobId, detailsPayload.GetProperty("jobId").GetString());
         Assert.Equal(hash, detailsPayload.GetProperty("hash").GetString());
         Assert.Equal("queued", detailsPayload.GetProperty("status").GetString());
+        Assert.True(detailsPayload.GetProperty("inputRetained").GetBoolean());
+        Assert.False(detailsPayload.TryGetProperty("temporaryFileKey", out _));
         Assert.True(detailsPayload.TryGetProperty("diagnostics", out _));
+        Assert.False(detailsPayload.GetProperty("diagnostics").TryGetProperty("rawErrorExcerpt", out _));
         var attempts = detailsPayload.GetProperty("attempts").EnumerateArray().ToArray();
         Assert.Single(attempts);
         Assert.Equal(jobId, attempts[0].GetProperty("jobId").GetString());
@@ -1209,6 +1262,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
             payload.GetProperty("health").GetString(),
             new[] { "unknown", "healthy", "unhealthy" });
         Assert.True(payload.GetProperty("queue").GetProperty("queued").GetInt32() >= 1);
+        Assert.True(payload.GetProperty("queue").TryGetProperty("staleProcessing", out _));
         Assert.True(payload.TryGetProperty("workers", out _));
         Assert.True(payload.TryGetProperty("recentDiagnostics", out _));
     }

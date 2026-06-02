@@ -165,6 +165,14 @@ unknown
 
 Admin UI не полагается только на Docker status. Источник истины для Worker в приложении — heartbeat и runtime-состояние в PostgreSQL.
 
+Перед запуском Web/Worker production compose должен выполнить отдельный migration step:
+
+```text
+CenteralES.DatabaseMigrator
+```
+
+Этот step применяет embedded SQL migrations из `CenteralES.Infrastructure`, записывает `schema_migrations` и завершается до старта runtime-процессов. Web и Worker в Production должны запускаться с `Database:AutoBootstrap=false`, чтобы runtime не требовал `CREATE DATABASE`/DDL прав.
+
 ## Общая инфраструктура
 
 ```text

@@ -133,7 +133,7 @@ internal sealed record AdminJobDetailsResponse(
     string SubjectId,
     string Capability,
     string Hash,
-    string TemporaryFileKey,
+    bool InputRetained,
     int AttemptNumber,
     string Status,
     DateTimeOffset ScheduledAt,
@@ -387,7 +387,7 @@ internal sealed record AdminAttemptDiagnosticsResponse(
     int? HttpStatus,
     string? NormalizedError,
     bool? Retryable,
-    string? RawErrorExcerpt,
+    string? Excerpt,
     string? CorrelationId);
 
 internal sealed record AdminProcessingAttemptResponse(
@@ -415,6 +415,7 @@ internal sealed record AdminProcessorStatusResponse(
 internal sealed record AdminProcessorQueueCountsResponse(
     int Queued,
     int Processing,
+    int StaleProcessing,
     int Completed,
     int Failed,
     int Blocked,

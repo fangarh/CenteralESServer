@@ -16,7 +16,7 @@ internal static class AdminAuditEndpoints
             int? limit,
             HttpRequest request,
             IAdminAuthenticator adminAuthenticator,
-            IAdminProcessingReadStore readStore,
+            IAdminAuditReadStore readStore,
             CancellationToken cancellationToken) =>
         {
             var authorization = await ApiAuthorization.AuthorizeAdminApiAsync(

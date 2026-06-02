@@ -9,14 +9,14 @@ public sealed class WorkerJobProcessor
 {
     private readonly ILogger<WorkerJobProcessor> _logger;
     private readonly WorkerJobProcessorOptions _options;
-    private readonly IProcessingJobQueue _queue;
+    private readonly IProcessingJobCommandQueue _queue;
     private readonly IPdfStampRecognizer _recognizer;
     private readonly IPdfStampRecognitionResultStore _resultStore;
     private readonly ITemporaryFileStore _temporaryFileStore;
 
     public WorkerJobProcessor(
         ILogger<WorkerJobProcessor> logger,
-        IProcessingJobQueue queue,
+        IProcessingJobCommandQueue queue,
         IPdfStampRecognizer recognizer,
         IPdfStampRecognitionResultStore resultStore,
         ITemporaryFileStore temporaryFileStore,

@@ -10,22 +10,29 @@ public sealed class Worker : BackgroundService
     private static readonly TimeSpan JobHeartbeatInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(2);
     private readonly ILogger<Worker> _logger;
-    private readonly IProcessingJobQueue _queue;
+    private readonly IProcessingJobClaimQueue _queue;
+    private readonly IProcessingJobRecoveryQueue _recoveryQueue;
     private readonly IWorkerHeartbeatStore _heartbeatStore;
     private readonly WorkerJobProcessor _processor;
+    private readonly WorkerRecoveryOptions _recoveryOptions;
     private readonly string _workerId;
     private readonly DateTimeOffset _startedAt;
 
     public Worker(
         ILogger<Worker> logger,
-        IProcessingJobQueue queue,
+        IProcessingJobClaimQueue queue,
+        IProcessingJobRecoveryQueue recoveryQueue,
         IWorkerHeartbeatStore heartbeatStore,
-        WorkerJobProcessor processor)
+        WorkerJobProcessor processor,
+        WorkerRecoveryOptions? recoveryOptions = null)
     {
         _logger = logger;
         _queue = queue;
+        _recoveryQueue = recoveryQueue;
         _heartbeatStore = heartbeatStore;
         _processor = processor;
+        _recoveryOptions = recoveryOptions ?? new WorkerRecoveryOptions();
+        _recoveryOptions.Validate();
         _workerId = $"{Environment.MachineName}:{Environment.ProcessId}:{Guid.NewGuid():N}";
         _startedAt = DateTimeOffset.UtcNow;
     }
@@ -35,6 +42,7 @@ public sealed class Worker : BackgroundService
         _logger.LogInformation("CenteralES worker started.");
 
         var nextHeartbeatAt = DateTimeOffset.MinValue;
+        var nextRecoveryAt = DateTimeOffset.MinValue;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -51,6 +59,23 @@ public sealed class Worker : BackgroundService
                     stoppingToken);
                 _logger.LogInformation("Worker {WorkerId} heartbeat at {HeartbeatAt}.", _workerId, now);
                 nextHeartbeatAt = now.Add(HeartbeatInterval);
+            }
+
+            if (_recoveryOptions.Enabled && now >= nextRecoveryAt)
+            {
+                var recovered = await _recoveryQueue.RecoverStaleProcessingJobsAsync(
+                    new RecoverStaleProcessingJobsCommand(
+                        PdfStampRecognitionConstants.Capability,
+                        now.Subtract(_recoveryOptions.StaleJobTimeout),
+                        now,
+                        _recoveryOptions.BatchSize),
+                    stoppingToken);
+                if (recovered > 0)
+                {
+                    _logger.LogWarning("Recovered {RecoveredJobCount} stale processing jobs back to queue.", recovered);
+                }
+
+                nextRecoveryAt = now.Add(_recoveryOptions.RecoveryInterval);
             }
 
             var job = await _queue.ClaimNextAsync(now, stoppingToken);
@@ -93,9 +118,42 @@ public sealed class Worker : BackgroundService
         while (await timer.WaitForNextTickAsync(cancellationToken))
         {
             var now = DateTimeOffset.UtcNow;
-            await _queue.RefreshHeartbeatAsync(
-                new RefreshProcessingJobHeartbeatCommand(jobId, now),
-                cancellationToken);
+            try
+            {
+                await _queue.RefreshHeartbeatAsync(
+                    new RefreshProcessingJobHeartbeatCommand(jobId, now),
+                    cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Failed to refresh heartbeat for job {JobId}.", jobId);
+            }
+        }
+    }
+}
+
+public sealed class WorkerRecoveryOptions
+{
+    public bool Enabled { get; init; } = true;
+    public TimeSpan StaleJobTimeout { get; init; } = TimeSpan.FromMinutes(5);
+    public TimeSpan RecoveryInterval { get; init; } = TimeSpan.FromMinutes(1);
+    public int BatchSize { get; init; } = 50;
+
+    public void Validate()
+    {
+        if (StaleJobTimeout <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException("Worker recovery staleJobTimeout must be greater than zero.");
+        }
+
+        if (RecoveryInterval <= TimeSpan.Zero)
+        {
+            throw new InvalidOperationException("Worker recovery recoveryInterval must be greater than zero.");
+        }
+
+        if (BatchSize <= 0)
+        {
+            throw new InvalidOperationException("Worker recovery batchSize must be greater than zero.");
         }
     }
 }

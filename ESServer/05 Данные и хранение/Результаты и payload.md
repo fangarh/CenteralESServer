@@ -118,6 +118,7 @@ payload table = pdf_stamp_recognition_results
 - общий индекс хранит `payload_size`;
 - списки и search endpoints не читают payload без необходимости;
 - Admin UI не встраивает raw JSON в обычный Result Details; полный payload доступен только по явному `Debug JSON` download через controlled endpoint.
+- для одного `capability + content_hash` индекс указывает на один актуальный payload; повторное сохранение результата заменяет ссылку и удаляет прежний JSON payload этой подсистемы, чтобы не оставлять orphan rows.
 
 Причина:
 
@@ -169,7 +170,7 @@ artifacts = processed image files
 
 ## Retention
 
-В MVP результаты хранятся бессрочно как cache.
+В MVP результаты хранятся бессрочно как cache. Для одного hash хранится актуальный payload результата; исторические payload-версии по тому же `capability + content_hash` не удерживаются отдельной историей.
 
 Но модель должна предусматривать будущую retention policy:
 

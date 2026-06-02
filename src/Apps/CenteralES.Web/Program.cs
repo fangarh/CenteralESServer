@@ -21,18 +21,35 @@ var processingDatabaseConnectionString = PostgresDatabaseConnectionStringResolve
 var temporaryStorageRoot = TemporaryStorageRootResolver.Resolve(builder.Configuration["Storage:TemporaryRoot"]);
 var temporaryStorageLimits = ResolveTemporaryStorageLimits(builder.Configuration);
 var pdfMaxUploadBytes = ResolvePdfMaxUploadBytes(builder.Configuration);
-var databaseBootstrapper = new PostgresDatabaseBootstrapper();
-await databaseBootstrapper.EnsureDatabaseAsync(processingDatabaseConnectionString, CancellationToken.None);
+var autoBootstrapDatabase = ShouldAutoBootstrapDatabase(builder.Configuration, builder.Environment);
+if (autoBootstrapDatabase)
+{
+    var databaseBootstrapper = new PostgresDatabaseBootstrapper();
+    await databaseBootstrapper.EnsureDatabaseAsync(processingDatabaseConnectionString, CancellationToken.None);
+}
 
-builder.Services.AddSingleton(NpgsqlDataSource.Create(processingDatabaseConnectionString));
+builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(processingDatabaseConnectionString));
 builder.Services.AddSingleton<IApiKeyAuthenticator, PostgresApiKeyAuthenticator>();
 builder.Services.AddSingleton<IAdminAuthenticator, PostgresAdminAuthenticator>();
-builder.Services.AddSingleton<IProcessingJobQueue, PostgresProcessingJobQueue>();
+builder.Services.AddSingleton<PostgresProcessingJobQueue>();
+builder.Services.AddSingleton<IProcessingJobQueue>(services => services.GetRequiredService<PostgresProcessingJobQueue>());
+builder.Services.AddSingleton<IProcessingJobCommandQueue>(services => services.GetRequiredService<PostgresProcessingJobQueue>());
+builder.Services.AddSingleton<IProcessingJobReadStore>(services => services.GetRequiredService<PostgresProcessingJobQueue>());
 builder.Services.AddSingleton<IPdfStampRecognitionResultStore, PostgresPdfStampRecognitionResultStore>();
+builder.Services.AddSingleton<IContentHasher, ContentHasher>();
+builder.Services.AddSingleton<SubmitPdfStampRecognitionJobHandler>();
 builder.Services.AddSingleton<ITemporaryFileStore>(_ => new LocalTemporaryFileStore(temporaryStorageRoot));
 builder.Services.AddSingleton<ITemporaryStorageMonitor>(_ => new LocalTemporaryStorageMonitor(temporaryStorageRoot, temporaryStorageLimits));
 builder.Services.AddSingleton(new AdminStorageOptions(temporaryStorageRoot));
 builder.Services.AddSingleton(new AdminSettingsOptions(pdfMaxUploadBytes, temporaryStorageRoot, temporaryStorageLimits));
+builder.Services.AddSingleton<PostgresAdminProcessorReadStore>();
+builder.Services.AddSingleton<IAdminProcessorReadStore>(services => services.GetRequiredService<PostgresAdminProcessorReadStore>());
+builder.Services.AddSingleton<PostgresAdminJobReadStore>();
+builder.Services.AddSingleton<IAdminJobReadStore>(services => services.GetRequiredService<PostgresAdminJobReadStore>());
+builder.Services.AddSingleton<PostgresAdminAuditReadStore>();
+builder.Services.AddSingleton<IAdminAuditReadStore>(services => services.GetRequiredService<PostgresAdminAuditReadStore>());
+builder.Services.AddSingleton<PostgresAdminResultReadStore>();
+builder.Services.AddSingleton<IAdminResultReadStore>(services => services.GetRequiredService<PostgresAdminResultReadStore>());
 builder.Services.AddSingleton<IAdminProcessingReadStore, PostgresAdminProcessingReadStore>();
 builder.Services.AddSingleton<IAdminProcessingActionStore, PostgresAdminProcessingActionStore>();
 builder.Services.AddSingleton<IAdminApiKeyStore, PostgresAdminApiKeyStore>();
@@ -40,7 +57,11 @@ builder.Services.AddSingleton<IAdminUserStore, PostgresAdminUserStore>();
 
 var app = builder.Build();
 
-await databaseBootstrapper.ApplySchemaAsync(app.Services.GetRequiredService<NpgsqlDataSource>(), CancellationToken.None);
+if (autoBootstrapDatabase)
+{
+    var databaseBootstrapper = new PostgresDatabaseBootstrapper();
+    await databaseBootstrapper.ApplySchemaAsync(app.Services.GetRequiredService<NpgsqlDataSource>(), CancellationToken.None);
+}
 
 if (app.Environment.IsDevelopment())
 {
@@ -114,6 +135,17 @@ static long ResolvePdfMaxUploadBytes(IConfiguration configuration)
     }
 
     return value;
+}
+
+static bool ShouldAutoBootstrapDatabase(IConfiguration configuration, IHostEnvironment environment)
+{
+    var configured = configuration["Database:AutoBootstrap"];
+    if (bool.TryParse(configured, out var explicitValue))
+    {
+        return explicitValue;
+    }
+
+    return environment.IsDevelopment();
 }
 
 public partial class Program;

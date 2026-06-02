@@ -10,7 +10,7 @@
 - [x] **ARCH-01**: Solution разделён на Web, Worker, модули домена/application/infrastructure и tests.
 - [x] **ARCH-02**: Реализация не использует Entity Framework.
 - [x] **ARCH-03**: Основные бизнес-операции покрываются TDD-тестами до или вместе с реализацией.
-- [x] **ARCH-04**: PostgreSQL schema bootstrap использует явные SQL migration-файлы и runner без EF.
+- [x] **ARCH-04**: PostgreSQL schema bootstrap использует явные SQL migration-файлы и runner без EF; production path имеет отдельный `CenteralES.DatabaseMigrator`, а Web/Worker auto-bootstrap включается только в Development или явным `Database:AutoBootstrap=true`.
 
 ### Public API
 
@@ -32,6 +32,7 @@
 - [x] **QUEUE-02**: Worker выбирает задачи конкурентно безопасно.
 - [x] **QUEUE-03**: Дедупликация использует `capability + content_hash`.
 - [x] **QUEUE-04**: Retry policy поддерживает max attempts и безопасный final state `blocked`.
+- [x] **QUEUE-05**: Worker recovery возвращает stale `processing` jobs обратно в `queued` без создания новой attempt.
 
 ### PDF Processor
 
@@ -45,8 +46,10 @@
 
 - [x] **STORE-01**: Входные PDF хранятся временно и удаляются после terminal state.
 - [x] **STORE-02**: Result index хранит lightweight ссылку на payload.
-- [x] **STORE-03**: PDF result payload хранится в result store подсистемы.
+- [x] **STORE-03**: PDF result payload хранится в result store подсистемы; для одного `capability + content_hash` удерживается актуальный payload без orphan JSON rows при повторном сохранении.
 - [x] **STORE-04**: Temporary storage hard limit блокирует новые upload-ы с `503 temporary_storage_full`.
+- [x] **STORE-05**: Public PDF upload supports selectable content hash algorithms through an enum-like request parameter: default `sha256` and `gost-r-34.11-2012-256` / Streebog-256; the algorithm prefix is part of `content_hash`.
+- [x] **STORE-06**: Public PDF upload computes and stores aliases for every supported content hash algorithm so result/job lookup can accept any supported prefixed hash.
 
 ### Admin and Operations
 
@@ -94,7 +97,7 @@
 | ARCH-01 | Phase 1 | Done |
 | ARCH-02 | Phase 1 | Done |
 | ARCH-03 | Phase 1 | Done |
-| ARCH-04 | Phase 2 | Done: embedded SQL migration runner with `schema_migrations` baseline |
+| ARCH-04 | Phase 2 | Done: embedded SQL migration runner with `schema_migrations` baseline, standalone `CenteralES.DatabaseMigrator`, and Development-or-explicit runtime auto-bootstrap |
 | API-01 | Phase 1 | Done |
 | API-02 | Phase 1 | Done |
 | API-03 | Phase 1 | Done |
@@ -107,6 +110,7 @@
 | QUEUE-02 | Phase 1 | Done |
 | QUEUE-03 | Phase 1 | Done |
 | QUEUE-04 | Phase 1 | Done |
+| QUEUE-05 | Phase 2 | Done: job heartbeat based stale processing recovery returns current jobs to `queued` with `FOR UPDATE SKIP LOCKED` |
 | PDF-01 | Phase 1 | Done |
 | PDF-02 | Phase 1 | Done |
 | PDF-03 | Phase 1 | Done |
@@ -114,8 +118,10 @@
 | PDF-05 | Phase 1 | Done |
 | STORE-01 | Phase 1 | Done |
 | STORE-02 | Phase 1 | Done: lightweight result index plus Admin Results metadata visibility |
-| STORE-03 | Phase 1 | Done: PDF payload store, with Admin Results avoiding raw payload exposure |
+| STORE-03 | Phase 1 | Done: PDF payload store, Admin Results avoiding raw payload exposure, repeated saves replacing the prior payload for the same hash |
 | STORE-04 | Phase 2 | Done: hard-limit upload guard plus Admin Storage capacity visibility |
+| STORE-05 | Phase 2 | Done: selectable prefixed content hash algorithms for Public PDF upload, including SHA-256 and GOST R 34.11-2012 / Streebog-256 |
+| STORE-06 | Phase 2 | Done: all supported content hashes are stored as subject aliases and public lookup resolves by any alias |
 | ADMIN-01 | Phase 1 | Done: `/admin` UI shell, Jobs/Job Details, Results, Processor Details, Health, Delivery, Storage, Settings plus Admin API |
 | ADMIN-02 | Phase 2 | Done: Backend endpoint plus UI action for single-job retry |
 | ADMIN-03 | Phase 2 | Done: manual retry/API key/admin user audit plus filtered Admin Audit UI with safe details |
@@ -132,10 +138,10 @@
 | DEPLOY-02 | Phase 3 | Pending |
 
 **Coverage:**
-- v1 requirements: 39 total
-- Mapped to phases: 39
+- v1 requirements: 42 total
+- Mapped to phases: 42
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-02 after retention policy visibility*
+*Last updated: 2026-06-02 after code review remediation*

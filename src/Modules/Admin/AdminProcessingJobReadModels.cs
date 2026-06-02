@@ -157,6 +157,7 @@ public sealed record AdminProcessorStatus(
 public sealed record AdminProcessorQueueCounts(
     int Queued,
     int Processing,
+    int StaleProcessing,
     int Completed,
     int Failed,
     int Blocked,
@@ -179,7 +180,7 @@ public sealed record AdminProcessorWorkerStatus(
     DateTimeOffset HeartbeatAt,
     bool Stale);
 
-public interface IAdminProcessingReadStore
+public interface IAdminJobReadStore
 {
     Task<IReadOnlyList<AdminProcessingJobListItem>> ListJobsAsync(
         AdminProcessingJobListQuery query,
@@ -191,17 +192,26 @@ public interface IAdminProcessingReadStore
         Guid jobId,
         string processorKey,
         CancellationToken cancellationToken);
+}
 
+public interface IAdminProcessorReadStore
+{
     Task<AdminProcessorStatus> GetProcessorStatusAsync(
         string processorKey,
         string capability,
         int recentDiagnosticsLimit,
         CancellationToken cancellationToken);
+}
 
+public interface IAdminAuditReadStore
+{
     Task<IReadOnlyList<AdminAuditEventListItem>> ListAuditEventsAsync(
         AdminAuditEventListQuery query,
         CancellationToken cancellationToken);
+}
 
+public interface IAdminResultReadStore
+{
     Task<IReadOnlyList<AdminResultReference>> ListResultsAsync(
         AdminResultListQuery query,
         CancellationToken cancellationToken);
@@ -211,4 +221,12 @@ public interface IAdminProcessingReadStore
     Task<AdminPdfStampRecognitionPayload?> GetPdfStampRecognitionPayloadAsync(
         Guid payloadId,
         CancellationToken cancellationToken);
+}
+
+public interface IAdminProcessingReadStore :
+    IAdminJobReadStore,
+    IAdminProcessorReadStore,
+    IAdminAuditReadStore,
+    IAdminResultReadStore
+{
 }

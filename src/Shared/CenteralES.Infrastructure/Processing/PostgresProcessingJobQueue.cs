@@ -24,6 +24,7 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         var existing = await FindSubjectAsync(connection, transaction, command, cancellationToken);
         if (existing is not null && IsActive(existing.CurrentJobStatus))
         {
+            await UpsertContentHashesAsync(connection, transaction, existing.SubjectId, command, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return new EnqueueProcessingJobResult(
                 existing.SubjectId,
@@ -70,6 +71,8 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
             insertSubject.Parameters.AddWithValue("updated_at", now);
             await insertSubject.ExecuteNonQueryAsync(cancellationToken);
         }
+
+        await UpsertContentHashesAsync(connection, transaction, subjectId, command, cancellationToken);
 
         await using var insertJob = new NpgsqlCommand("""
             insert into processing_jobs (
@@ -173,6 +176,29 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         await update.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task<int> RecoverStaleProcessingJobsAsync(RecoverStaleProcessingJobsCommand command, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (string.IsNullOrWhiteSpace(command.Capability))
+        {
+            throw new ArgumentException("Capability is required.", nameof(command));
+        }
+
+        var limit = Math.Clamp(command.Limit, 1, 500);
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using var recover = new NpgsqlCommand(PostgresProcessingSql.RecoverStaleProcessingJobs, connection, transaction);
+        recover.Parameters.AddWithValue("capability", command.Capability);
+        recover.Parameters.AddWithValue("stale_before", command.StaleBefore);
+        recover.Parameters.AddWithValue("recovered_at", command.RecoveredAt);
+        recover.Parameters.AddWithValue("limit", limit);
+
+        var recovered = Convert.ToInt32(await recover.ExecuteScalarAsync(cancellationToken));
+        await transaction.CommitAsync(cancellationToken);
+        return recovered;
+    }
+
     public async Task<ProcessingJobSnapshot?> GetCurrentByHashAsync(string capability, string contentHash, CancellationToken cancellationToken)
     {
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
@@ -197,8 +223,9 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
             from processing_subjects s
             join processing_jobs j on j.id = s.current_job_id
             left join processing_attempt_diagnostics d on d.job_id = j.id
+            left join processing_content_hashes h on h.subject_id = s.id
             where s.capability = @capability
-              and s.content_hash = @content_hash;
+              and (s.content_hash = @content_hash or h.hash_value = @content_hash);
             """, connection);
         command.Parameters.AddWithValue("capability", capability);
         command.Parameters.AddWithValue("content_hash", contentHash);
@@ -250,11 +277,14 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
             set status = 'completed',
                 finished_at = @finished_at,
                 updated_at = @finished_at
-            where id = @job_id;
+            where id = @job_id
+              and subject_id = @subject_id
+              and status = 'processing';
             """, connection, transaction);
         updateJob.Parameters.AddWithValue("finished_at", command.FinishedAt);
         updateJob.Parameters.AddWithValue("job_id", command.JobId);
-        await updateJob.ExecuteNonQueryAsync(cancellationToken);
+        updateJob.Parameters.AddWithValue("subject_id", command.SubjectId);
+        await ExecuteRequiredAsync(updateJob, $"Processing job '{command.JobId}' is not in processing state.", cancellationToken);
 
         await UpsertDiagnosticsAsync(connection, transaction, command.JobId, command.Diagnostics, command.FinishedAt, cancellationToken);
 
@@ -263,12 +293,14 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
             set state = 'completed',
                 result_id = @result_id,
                 updated_at = @finished_at
-            where id = @subject_id;
+            where id = @subject_id
+              and current_job_id = @job_id;
             """, connection, transaction);
         updateSubject.Parameters.AddWithValue("result_id", command.ResultId);
         updateSubject.Parameters.AddWithValue("finished_at", command.FinishedAt);
         updateSubject.Parameters.AddWithValue("subject_id", command.SubjectId);
-        await updateSubject.ExecuteNonQueryAsync(cancellationToken);
+        updateSubject.Parameters.AddWithValue("job_id", command.JobId);
+        await ExecuteRequiredAsync(updateSubject, $"Processing subject '{command.SubjectId}' is not owned by job '{command.JobId}'.", cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
     }
@@ -286,22 +318,27 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
                 scheduled_at = @scheduled_at,
                 heartbeat_at = null,
                 updated_at = @deferred_at
-            where id = @job_id;
+            where id = @job_id
+              and subject_id = @subject_id
+              and status = 'processing';
             """, connection, transaction);
         updateJob.Parameters.AddWithValue("scheduled_at", command.ScheduledAt);
         updateJob.Parameters.AddWithValue("deferred_at", command.DeferredAt);
         updateJob.Parameters.AddWithValue("job_id", command.JobId);
-        await updateJob.ExecuteNonQueryAsync(cancellationToken);
+        updateJob.Parameters.AddWithValue("subject_id", command.SubjectId);
+        await ExecuteRequiredAsync(updateJob, $"Processing job '{command.JobId}' is not in processing state.", cancellationToken);
 
         await using var updateSubject = new NpgsqlCommand("""
             update processing_subjects
             set state = 'queued',
                 updated_at = @deferred_at
-            where id = @subject_id;
+            where id = @subject_id
+              and current_job_id = @job_id;
             """, connection, transaction);
         updateSubject.Parameters.AddWithValue("deferred_at", command.DeferredAt);
         updateSubject.Parameters.AddWithValue("subject_id", command.SubjectId);
-        await updateSubject.ExecuteNonQueryAsync(cancellationToken);
+        updateSubject.Parameters.AddWithValue("job_id", command.JobId);
+        await ExecuteRequiredAsync(updateSubject, $"Processing subject '{command.SubjectId}' is not owned by job '{command.JobId}'.", cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
     }
@@ -321,12 +358,15 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
             set status = @status,
                 finished_at = @finished_at,
                 updated_at = @finished_at
-            where id = @job_id;
+            where id = @job_id
+              and subject_id = @subject_id
+              and status = 'processing';
             """, connection, transaction);
         updateJob.Parameters.AddWithValue("status", status);
         updateJob.Parameters.AddWithValue("finished_at", command.FinishedAt);
         updateJob.Parameters.AddWithValue("job_id", command.JobId);
-        await updateJob.ExecuteNonQueryAsync(cancellationToken);
+        updateJob.Parameters.AddWithValue("subject_id", command.SubjectId);
+        await ExecuteRequiredAsync(updateJob, $"Processing job '{command.JobId}' is not in processing state.", cancellationToken);
 
         var diagnostics = command.Diagnostics with
         {
@@ -381,12 +421,14 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
                 set current_job_id = @current_job_id,
                     state = 'queued',
                     updated_at = @finished_at
-                where id = @subject_id;
+                where id = @subject_id
+                  and current_job_id = @failed_job_id;
                 """, connection, transaction);
             updateSubjectForRetry.Parameters.AddWithValue("current_job_id", retryJobId);
             updateSubjectForRetry.Parameters.AddWithValue("finished_at", command.FinishedAt);
             updateSubjectForRetry.Parameters.AddWithValue("subject_id", command.SubjectId);
-            await updateSubjectForRetry.ExecuteNonQueryAsync(cancellationToken);
+            updateSubjectForRetry.Parameters.AddWithValue("failed_job_id", command.JobId);
+            await ExecuteRequiredAsync(updateSubjectForRetry, $"Processing subject '{command.SubjectId}' is not owned by job '{command.JobId}'.", cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
             return;
@@ -396,12 +438,14 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
             update processing_subjects
             set state = @status,
                 updated_at = @finished_at
-            where id = @subject_id;
+            where id = @subject_id
+              and current_job_id = @job_id;
             """, connection, transaction);
         updateSubject.Parameters.AddWithValue("status", status);
         updateSubject.Parameters.AddWithValue("finished_at", command.FinishedAt);
         updateSubject.Parameters.AddWithValue("subject_id", command.SubjectId);
-        await updateSubject.ExecuteNonQueryAsync(cancellationToken);
+        updateSubject.Parameters.AddWithValue("job_id", command.JobId);
+        await ExecuteRequiredAsync(updateSubject, $"Processing subject '{command.SubjectId}' is not owned by job '{command.JobId}'.", cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
     }
@@ -451,12 +495,16 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
                 j.status
             from processing_subjects s
             left join processing_jobs j on j.id = s.current_job_id
+            left join processing_content_hashes h on h.subject_id = s.id
             where s.capability = @capability
-              and s.content_hash = @content_hash
+              and (
+                  s.content_hash = any(@content_hashes)
+                  or h.hash_value = any(@content_hashes)
+              )
             for update of s;
             """, connection, transaction);
         find.Parameters.AddWithValue("capability", command.Capability);
-        find.Parameters.AddWithValue("content_hash", command.ContentHash);
+        find.Parameters.AddWithValue("content_hashes", ResolveHashValues(command).ToArray());
 
         await using var reader = await find.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
@@ -596,5 +644,71 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
     private static int? ToDurationMilliseconds(TimeSpan? duration)
     {
         return duration is null ? null : Convert.ToInt32(duration.Value.TotalMilliseconds);
+    }
+
+    private static async Task UpsertContentHashesAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid subjectId,
+        CreateProcessingJobCommand command,
+        CancellationToken cancellationToken)
+    {
+        var hashes = ResolveContentHashes(command).ToArray();
+        foreach (var hash in hashes)
+        {
+            await using var insert = new NpgsqlCommand("""
+                insert into processing_content_hashes (
+                    subject_id,
+                    capability,
+                    algorithm,
+                    hash_value,
+                    created_at)
+                values (
+                    @subject_id,
+                    @capability,
+                    @algorithm,
+                    @hash_value,
+                    @created_at)
+                on conflict (capability, hash_value) do nothing;
+                """, connection, transaction);
+            insert.Parameters.AddWithValue("subject_id", subjectId);
+            insert.Parameters.AddWithValue("capability", command.Capability);
+            insert.Parameters.AddWithValue("algorithm", hash.Algorithm);
+            insert.Parameters.AddWithValue("hash_value", hash.HashValue);
+            insert.Parameters.AddWithValue("created_at", command.CreatedAt);
+            await insert.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
+    private static IReadOnlyList<ProcessingContentHash> ResolveContentHashes(CreateProcessingJobCommand command)
+    {
+        if (command.ContentHashes is { Count: > 0 })
+        {
+            return command.ContentHashes;
+        }
+
+        var algorithm = command.ContentHash.Split(':', 2)[0];
+        return [new ProcessingContentHash(algorithm, command.ContentHash)];
+    }
+
+    private static IReadOnlyList<string> ResolveHashValues(CreateProcessingJobCommand command)
+    {
+        return ResolveContentHashes(command)
+            .Select(hash => hash.HashValue)
+            .Append(command.ContentHash)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static async Task ExecuteRequiredAsync(
+        NpgsqlCommand command,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        var affectedRows = await command.ExecuteNonQueryAsync(cancellationToken);
+        if (affectedRows != 1)
+        {
+            throw new InvalidOperationException(message);
+        }
     }
 }

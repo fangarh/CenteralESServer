@@ -17,21 +17,35 @@ var processingDatabaseConnectionString = PostgresDatabaseConnectionStringResolve
     builder.Environment.ContentRootPath);
 var temporaryStorageRoot = TemporaryStorageRootResolver.Resolve(builder.Configuration["Storage:TemporaryRoot"]);
 var workerJobProcessorOptions = ResolveWorkerJobProcessorOptions(builder.Configuration);
-var databaseBootstrapper = new PostgresDatabaseBootstrapper();
-await databaseBootstrapper.EnsureDatabaseAsync(processingDatabaseConnectionString, CancellationToken.None);
+var workerRecoveryOptions = ResolveWorkerRecoveryOptions(builder.Configuration);
+var autoBootstrapDatabase = ShouldAutoBootstrapDatabase(builder.Configuration, builder.Environment);
+if (autoBootstrapDatabase)
+{
+    var databaseBootstrapper = new PostgresDatabaseBootstrapper();
+    await databaseBootstrapper.EnsureDatabaseAsync(processingDatabaseConnectionString, CancellationToken.None);
+}
 
-builder.Services.AddSingleton(NpgsqlDataSource.Create(processingDatabaseConnectionString));
-builder.Services.AddSingleton<IProcessingJobQueue, PostgresProcessingJobQueue>();
+builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(processingDatabaseConnectionString));
+builder.Services.AddSingleton<PostgresProcessingJobQueue>();
+builder.Services.AddSingleton<IProcessingJobQueue>(services => services.GetRequiredService<PostgresProcessingJobQueue>());
+builder.Services.AddSingleton<IProcessingJobCommandQueue>(services => services.GetRequiredService<PostgresProcessingJobQueue>());
+builder.Services.AddSingleton<IProcessingJobClaimQueue>(services => services.GetRequiredService<PostgresProcessingJobQueue>());
+builder.Services.AddSingleton<IProcessingJobRecoveryQueue>(services => services.GetRequiredService<PostgresProcessingJobQueue>());
 builder.Services.AddSingleton<IWorkerHeartbeatStore, PostgresWorkerHeartbeatStore>();
 builder.Services.AddSingleton<IPdfStampRecognitionResultStore, PostgresPdfStampRecognitionResultStore>();
 RegisterPdfStampRecognizer(builder.Services, builder.Configuration);
 builder.Services.AddSingleton<ITemporaryFileStore>(_ => new LocalTemporaryFileStore(temporaryStorageRoot));
 builder.Services.AddSingleton(workerJobProcessorOptions);
+builder.Services.AddSingleton(workerRecoveryOptions);
 builder.Services.AddSingleton<WorkerJobProcessor>();
 builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
-await databaseBootstrapper.ApplySchemaAsync(host.Services.GetRequiredService<NpgsqlDataSource>(), CancellationToken.None);
+if (autoBootstrapDatabase)
+{
+    var databaseBootstrapper = new PostgresDatabaseBootstrapper();
+    await databaseBootstrapper.ApplySchemaAsync(host.Services.GetRequiredService<NpgsqlDataSource>(), CancellationToken.None);
+}
 host.Run();
 
 static void RegisterPdfStampRecognizer(IServiceCollection services, IConfiguration configuration)
@@ -46,7 +60,7 @@ static void RegisterPdfStampRecognizer(IServiceCollection services, IConfigurati
     var options = ResolveHttpPdfStampRecognizerOptions(configuration);
     services.AddSingleton(options);
     services.AddSingleton<HttpPdfStampRecognizerEndpointPool>();
-    services.AddSingleton(new HttpClient());
+    services.AddSingleton(_ => new HttpClient());
     services.AddSingleton<IPdfStampRecognizer, HttpPdfStampRecognizer>();
 }
 
@@ -86,7 +100,22 @@ static WorkerJobProcessorOptions ResolveWorkerJobProcessorOptions(IConfiguration
     return options;
 }
 
-static int ReadPositiveInt(IConfiguration section, string key, int fallback)
+static WorkerRecoveryOptions ResolveWorkerRecoveryOptions(IConfiguration configuration)
+{
+    var section = configuration.GetSection("PdfStampRecognition:Recovery");
+    var options = new WorkerRecoveryOptions
+    {
+        Enabled = ReadBool(section, "enabled", true),
+        StaleJobTimeout = ReadTimeSpan(section, "staleJobTimeout", TimeSpan.FromMinutes(5)),
+        RecoveryInterval = ReadTimeSpan(section, "recoveryInterval", TimeSpan.FromMinutes(1)),
+        BatchSize = ReadPositiveInt(section, "batchSize", 50)
+    };
+    options.Validate();
+
+    return options;
+}
+
+static int ReadPositiveInt(IConfigurationSection section, string key, int fallback)
 {
     var value = section[key];
     if (string.IsNullOrWhiteSpace(value))
@@ -96,10 +125,10 @@ static int ReadPositiveInt(IConfiguration section, string key, int fallback)
 
     return int.TryParse(value, out var parsed)
         ? parsed
-        : throw new InvalidOperationException($"Configuration value PdfStampRecognition:Processor:{key} must be an integer.");
+        : throw new InvalidOperationException($"Configuration value {section.Path}:{key} must be an integer.");
 }
 
-static TimeSpan ReadTimeSpan(IConfiguration section, string key, TimeSpan fallback)
+static TimeSpan ReadTimeSpan(IConfigurationSection section, string key, TimeSpan fallback)
 {
     var value = section[key];
     if (string.IsNullOrWhiteSpace(value))
@@ -109,5 +138,29 @@ static TimeSpan ReadTimeSpan(IConfiguration section, string key, TimeSpan fallba
 
     return TimeSpan.TryParse(value, out var parsed)
         ? parsed
-        : throw new InvalidOperationException($"Configuration value PdfStampRecognition:Processor:{key} must be a TimeSpan.");
+        : throw new InvalidOperationException($"Configuration value {section.Path}:{key} must be a TimeSpan.");
+}
+
+static bool ReadBool(IConfigurationSection section, string key, bool fallback)
+{
+    var value = section[key];
+    if (string.IsNullOrWhiteSpace(value))
+    {
+        return fallback;
+    }
+
+    return bool.TryParse(value, out var parsed)
+        ? parsed
+        : throw new InvalidOperationException($"Configuration value {section.Path}:{key} must be a boolean.");
+}
+
+static bool ShouldAutoBootstrapDatabase(IConfiguration configuration, IHostEnvironment environment)
+{
+    var configured = configuration["Database:AutoBootstrap"];
+    if (bool.TryParse(configured, out var explicitValue))
+    {
+        return explicitValue;
+    }
+
+    return environment.IsDevelopment();
 }

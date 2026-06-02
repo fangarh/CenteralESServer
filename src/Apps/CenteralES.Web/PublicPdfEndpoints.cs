@@ -13,10 +13,7 @@ internal static class PublicPdfEndpoints
         app.MapPost("/api/pdf-stamp-recognition/jobs", async (
             HttpRequest request,
             IApiKeyAuthenticator apiKeyAuthenticator,
-            IProcessingJobQueue queue,
-            IPdfStampRecognitionResultStore resultStore,
-            ITemporaryFileStore temporaryFileStore,
-            ITemporaryStorageMonitor temporaryStorageMonitor,
+            SubmitPdfStampRecognitionJobHandler submitJob,
             CancellationToken cancellationToken) =>
         {
             var authorization = await ApiAuthorization.AuthorizePublicApiAsync(
@@ -53,6 +50,15 @@ internal static class PublicPdfEndpoints
             }
 
             var file = form.Files.GetFile("file") ?? form.Files.FirstOrDefault();
+            var requestedHashAlgorithm = ResolveHashAlgorithmParameter(request, form);
+            var hashAlgorithm = ContentHashAlgorithm.Sha256;
+            if (requestedHashAlgorithm is not null
+                && !ContentHashAlgorithms.TryParse(requestedHashAlgorithm, out hashAlgorithm))
+            {
+                return Results.BadRequest(ApiErrorResponse.Create(
+                    "invalid_input",
+                    $"Hash algorithm '{requestedHashAlgorithm}' is not supported. Supported values: {ContentHashAlgorithms.Sha256}, {ContentHashAlgorithms.GostR34112012_256}."));
+            }
 
             if (file is null || file.Length == 0)
             {
@@ -66,51 +72,30 @@ internal static class PublicPdfEndpoints
                     statusCode: StatusCodes.Status413PayloadTooLarge);
             }
 
-            await using var stream = file.OpenReadStream();
-            var hash = await ContentHash.ComputeSha256Async(stream, cancellationToken);
-
-            var existingResult = await resultStore.GetByHashAsync(hash, cancellationToken);
-            if (existingResult is not null)
-            {
-                return Results.Ok(ApiMappings.ToPdfResultResponse(existingResult));
-            }
-
-            var currentJob = await queue.GetCurrentByHashAsync(PdfStampRecognitionConstants.Capability, hash, cancellationToken);
-            if (currentJob is not null && ApiMappings.IsPublicPending(currentJob.Status))
-            {
-                return Results.Accepted(
-                    $"/api/jobs/{currentJob.JobId:N}",
-                    ApiMappings.ToPdfJobResponse(currentJob, deduplicated: true));
-            }
-
-            var temporaryFileKey = $"incoming/{hash.Replace("sha256:", string.Empty, StringComparison.Ordinal)}.pdf";
-            var capacity = await temporaryStorageMonitor.CheckCapacityAsync(
-                new TemporaryStorageCapacityRequest(file.Length),
+            var submitResult = await submitJob.HandleAsync(
+                new SubmitPdfStampRecognitionJobCommand(
+                    file.OpenReadStream,
+                    file.Length,
+                    hashAlgorithm,
+                    DateTimeOffset.UtcNow),
                 cancellationToken);
-            if (capacity.Status is TemporaryStorageCapacityStatus.Full)
+
+            return submitResult switch
             {
-                return Results.Json(
+                SubmitPdfStampRecognitionJobCompleted completed => Results.Ok(ApiMappings.ToPdfResultResponse(completed.Result)),
+                SubmitPdfStampRecognitionJobAccepted accepted => Results.Accepted(
+                    $"/api/jobs/{accepted.JobId:N}",
+                    new PdfJobResponse(
+                        accepted.ContentHash,
+                        accepted.JobId.ToString("N"),
+                        accepted.AttemptNumber,
+                        ApiMappings.ToPublicStatus(accepted.Status),
+                        accepted.Deduplicated)),
+                SubmitPdfStampRecognitionJobTemporaryStorageFull => Results.Json(
                     ApiErrorResponse.Create("temporary_storage_full", "Temporary storage is full. Try again after cleanup frees space."),
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
-            }
-
-            await using (var saveStream = file.OpenReadStream())
-            {
-                await temporaryFileStore.SaveAsync(temporaryFileKey, saveStream, cancellationToken);
-            }
-
-            var enqueueResult = await queue.EnqueueAsync(
-                new CreateProcessingJobCommand(PdfStampRecognitionConstants.Capability, hash, temporaryFileKey, DateTimeOffset.UtcNow),
-                cancellationToken);
-
-            return Results.Accepted(
-                $"/api/jobs/{enqueueResult.JobId:N}",
-                new PdfJobResponse(
-                    hash,
-                    enqueueResult.JobId.ToString("N"),
-                    enqueueResult.AttemptNumber,
-                    ApiMappings.ToPublicStatus(enqueueResult.Status),
-                    enqueueResult.Deduplicated));
+                    statusCode: StatusCodes.Status503ServiceUnavailable),
+                _ => throw new InvalidOperationException($"Unknown PDF stamp recognition submission result '{submitResult.GetType().Name}'.")
+            };
         })
         .DisableAntiforgery()
         .WithMetadata(new PdfUploadRequestSizeLimitMetadata(requestSizeLimitBytes))
@@ -120,7 +105,7 @@ internal static class PublicPdfEndpoints
             string hash,
             HttpRequest request,
             IApiKeyAuthenticator apiKeyAuthenticator,
-            IProcessingJobQueue queue,
+            IProcessingJobReadStore jobReadStore,
             IPdfStampRecognitionResultStore resultStore,
             CancellationToken cancellationToken) =>
         {
@@ -140,7 +125,7 @@ internal static class PublicPdfEndpoints
                 return Results.Ok(ApiMappings.ToPdfResultResponse(result));
             }
 
-            var currentJob = await queue.GetCurrentByHashAsync(PdfStampRecognitionConstants.Capability, hash, cancellationToken);
+            var currentJob = await jobReadStore.GetCurrentByHashAsync(PdfStampRecognitionConstants.Capability, hash, cancellationToken);
             return currentJob is not null && ApiMappings.IsPublicPending(currentJob.Status)
                 ? Results.Accepted($"/api/jobs/{currentJob.JobId:N}", ApiMappings.ToPdfJobResponse(currentJob, deduplicated: true))
                 : Results.NotFound(ApiErrorResponse.Create("result_not_found", $"No result or active processing found for hash '{hash}'."));
@@ -151,7 +136,7 @@ internal static class PublicPdfEndpoints
             string jobId,
             HttpRequest request,
             IApiKeyAuthenticator apiKeyAuthenticator,
-            IProcessingJobQueue queue,
+            IProcessingJobReadStore jobReadStore,
             CancellationToken cancellationToken) =>
         {
             var authorization = await ApiAuthorization.AuthorizePublicApiAsync(
@@ -169,7 +154,7 @@ internal static class PublicPdfEndpoints
                 return Results.BadRequest(ApiErrorResponse.Create("invalid_input", $"Job id '{jobId}' is not a valid GUID."));
             }
 
-            var job = await queue.GetJobAsync(parsedJobId, cancellationToken);
+            var job = await jobReadStore.GetJobAsync(parsedJobId, cancellationToken);
             return job is null
                 ? Results.NotFound(ApiErrorResponse.Create("job_not_found", $"Job '{jobId}' was not found."))
                 : Results.Ok(ApiMappings.ToPdfJobResponse(job, deduplicated: false));
@@ -185,5 +170,18 @@ internal static class PublicPdfEndpoints
         }
 
         public long? MaxRequestBodySize { get; }
+    }
+
+    private static string? ResolveHashAlgorithmParameter(HttpRequest request, IFormCollection form)
+    {
+        var queryValue = request.Query["hashAlgorithm"].FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(queryValue))
+        {
+            return queryValue;
+        }
+
+        return form.TryGetValue("hashAlgorithm", out var formValue)
+            ? formValue.FirstOrDefault()
+            : null;
     }
 }

@@ -263,33 +263,13 @@ public sealed class WorkerJobProcessorTests
         Assert.Null(fileStore.DeletedKey);
     }
 
-    private sealed class RecordingQueue : IProcessingJobQueue
+    private sealed class RecordingQueue : IProcessingJobCommandQueue
     {
         public CompleteProcessingJobCommand? Completed { get; private set; }
         public DeferProcessingJobCommand? Deferred { get; private set; }
         public FailProcessingJobCommand? Failed { get; private set; }
 
         public Task<EnqueueProcessingJobResult> EnqueueAsync(CreateProcessingJobCommand command, CancellationToken cancellationToken)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task<ClaimedProcessingJob?> ClaimNextAsync(DateTimeOffset now, CancellationToken cancellationToken)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task RefreshHeartbeatAsync(RefreshProcessingJobHeartbeatCommand command, CancellationToken cancellationToken)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task<ProcessingJobSnapshot?> GetCurrentByHashAsync(string capability, string contentHash, CancellationToken cancellationToken)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task<ProcessingJobSnapshot?> GetJobAsync(Guid jobId, CancellationToken cancellationToken)
         {
             throw new NotSupportedException();
         }
