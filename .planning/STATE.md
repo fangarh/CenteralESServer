@@ -89,6 +89,7 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - 2026-06-02: Admin audit read API added through `GET /api/admin/audit` with action/target/actor/date/limit filters; response exposes only safe audit metadata and does not return raw old/new JSON or technical metadata payloads.
 - 2026-06-02: Admin API key management backend added: `GET /api/admin/api-keys`, `POST /api/admin/api-keys`, and `POST /api/admin/api-keys/{keyId}/disable`; create returns raw secret only once, create/disable require CSRF and write safe audit events without secret/hash.
 - 2026-06-02: Admin user management backend added: `GET /api/admin/users`, `POST /api/admin/users`, `POST /api/admin/users/{userId}/disable`, and `POST /api/admin/users/{userId}/password`; state changes require CSRF, never return password/hash, and write safe audit events.
+- 2026-06-02: First Admin UI shell added at `/admin`: login, overview, failed/blocked jobs with single-job retry, processor passive health summary, API key create/disable, admin user create/password/disable, and audit list; UI is served by Web static assets without Node/Docker.
 
 ## Workflow Rules
 
@@ -98,4 +99,4 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-06-02 after Admin user management checkpoint*
+*Last updated: 2026-06-02 after Admin UI shell checkpoint*

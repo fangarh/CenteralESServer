@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Centeral ES Admin</title>
+  <link rel="stylesheet" href="/admin/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Навигация админки">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">C</div>
+        <div>
+          <div class="brand-title">Centeral ES</div>
+          <div class="brand-subtitle">Администрирование</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <button class="nav-item is-active" type="button" data-tab="overview">Сводка</button>
+        <button class="nav-item" type="button" data-tab="jobs">Задачи</button>
+        <button class="nav-item" type="button" data-tab="apiKeys">Ключи API</button>
+        <button class="nav-item" type="button" data-tab="users">Администраторы</button>
+        <button class="nav-item" type="button" data-tab="audit">Аудит</button>
+      </nav>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div>
+          <h1 id="page-title">Сводка</h1>
+          <p id="page-subtitle">Состояние очереди, обработчика и действий, которые требуют внимания.</p>
+        </div>
+        <div class="session">
+          <span id="session-login" class="session-login">Не выполнен вход</span>
+          <button id="refresh-button" class="icon-button" type="button" title="Обновить данные">Обновить</button>
+          <button id="logout-button" class="secondary-button" type="button" hidden>Выйти</button>
+        </div>
+      </header>
+
+      <section id="alert" class="alert" role="status" hidden></section>
+
+      <section id="login-panel" class="login-panel" aria-labelledby="login-title">
+        <form id="login-form" class="login-form">
+          <h2 id="login-title">Вход в админку</h2>
+          <label>
+            Логин
+            <input id="login-input" name="login" autocomplete="username" required>
+          </label>
+          <label>
+            Пароль
+            <input id="password-input" name="password" type="password" autocomplete="current-password" required>
+          </label>
+          <button class="primary-button" type="submit">Войти</button>
+        </form>
+      </section>
+
+      <section id="admin-content" hidden>
+        <section id="overview-tab" class="tab-panel">
+          <div class="summary-grid">
+            <div class="summary-tile">
+              <span class="tile-label">Задачи требуют retry</span>
+              <strong id="failed-count">0</strong>
+              <span id="failed-note">Нет данных</span>
+            </div>
+            <div class="summary-tile">
+              <span class="tile-label">Обработчик PDF</span>
+              <strong id="processor-health">Нет данных</strong>
+              <span id="processor-note">Пассивная проверка</span>
+            </div>
+            <div class="summary-tile">
+              <span class="tile-label">Активные ключи API</span>
+              <strong id="active-key-count">0</strong>
+              <span id="api-key-note">Ключи доступа сервиса ЭП</span>
+            </div>
+            <div class="summary-tile">
+              <span class="tile-label">Администраторы</span>
+              <strong id="active-user-count">0</strong>
+              <span id="user-note">Активные учетные записи</span>
+            </div>
+          </div>
+          <div class="section-band">
+            <div class="section-header">
+              <h2>Нужна ручная реакция</h2>
+              <button class="secondary-button" type="button" data-tab-jump="jobs">Открыть задачи</button>
+            </div>
+            <div id="overview-actions" class="work-list"></div>
+          </div>
+        </section>
+
+        <section id="jobs-tab" class="tab-panel" hidden>
+          <div class="section-band">
+            <div class="section-header">
+              <div>
+                <h2>Упавшие задачи</h2>
+                <p>Показаны failed и blocked задачи. Retry запускается только после подтверждения.</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Статус</th>
+                    <th>Задача</th>
+                    <th>Попытка</th>
+                    <th>Ошибка</th>
+                    <th>Endpoint</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="jobs-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="apiKeys-tab" class="tab-panel" hidden>
+          <div class="section-band">
+            <div class="section-header">
+              <div>
+                <h2>Ключи API</h2>
+                <p>Ключи клиента ЭП. Секрет показывается только один раз после создания.</p>
+              </div>
+            </div>
+            <form id="create-key-form" class="inline-form">
+              <label>
+                ID ключа
+                <input name="keyId" placeholder="ep-prod" minlength="3" maxlength="80" required>
+              </label>
+              <label>
+                Название
+                <input name="name" placeholder="Сервис ЭП" maxlength="200" required>
+              </label>
+              <label>
+                Возможности
+                <input name="capabilities" value="pdf-stamp-recognition" required>
+              </label>
+              <label>
+                Комментарий
+                <input name="comment" maxlength="1000" placeholder="Причина создания">
+              </label>
+              <button class="primary-button" type="submit">Создать ключ</button>
+            </form>
+            <div id="created-secret" class="secret-box" hidden></div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ключ</th>
+                    <th>Название</th>
+                    <th>Возможности</th>
+                    <th>Статус</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="api-keys-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="users-tab" class="tab-panel" hidden>
+          <div class="section-band">
+            <div class="section-header">
+              <div>
+                <h2>Администраторы</h2>
+                <p>Управление доступом к админке. Пароли и хэши не отображаются.</p>
+              </div>
+            </div>
+            <form id="create-user-form" class="inline-form">
+              <label>
+                Логин
+                <input name="login" minlength="3" maxlength="80" required>
+              </label>
+              <label>
+                Пароль
+                <input name="password" type="password" minlength="8" required>
+              </label>
+              <label>
+                Комментарий
+                <input name="comment" maxlength="1000" placeholder="Причина создания">
+              </label>
+              <button class="primary-button" type="submit">Создать администратора</button>
+            </form>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Логин</th>
+                    <th>Роль</th>
+                    <th>Статус</th>
+                    <th>Последний вход</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="users-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="audit-tab" class="tab-panel" hidden>
+          <div class="section-band">
+            <div class="section-header">
+              <div>
+                <h2>Журнал аудита</h2>
+                <p>Опасные действия администраторов без raw secrets и payload.</p>
+              </div>
+            </div>
+            <div id="audit-list" class="audit-list"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="confirm-dialog" class="confirm-dialog">
+    <form method="dialog">
+      <h2 id="confirm-title">Подтверждение</h2>
+      <p id="confirm-message"></p>
+      <label id="confirm-comment-label">
+        Комментарий
+        <textarea id="confirm-comment" maxlength="1000" rows="4"></textarea>
+      </label>
+      <menu>
+        <button id="confirm-cancel" class="secondary-button" value="cancel">Отмена</button>
+        <button id="confirm-ok" class="danger-button" value="ok">Подтвердить</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="/admin/app.js"></script>
+</body>
+</html>

@@ -49,7 +49,7 @@
 
 ### Admin and Operations
 
-- [ ] **ADMIN-01**: Admin UI показывает минимальную видимость очереди, failed/blocked jobs и processor health.
+- [x] **ADMIN-01**: Admin UI показывает минимальную видимость очереди, failed/blocked jobs и processor health.
 - [x] **ADMIN-02**: Admin может выполнить manual retry одной failed/blocked задачи.
 - [ ] **ADMIN-03**: Audit фиксирует опасные admin actions.
 - [x] **ADMIN-04**: Admin API отдаёт support report для Job Details без входного PDF, raw secrets и больших payload.
@@ -108,8 +108,8 @@
 | STORE-02 | Phase 1 | Done |
 | STORE-03 | Phase 1 | Done |
 | STORE-04 | Phase 2 | Done |
-| ADMIN-01 | Phase 1 | Partial: Admin API done, UI pending |
-| ADMIN-02 | Phase 2 | Done: Backend endpoint, UI pending |
+| ADMIN-01 | Phase 1 | Done: first `/admin` UI shell plus Admin API |
+| ADMIN-02 | Phase 2 | Done: Backend endpoint plus UI action for single-job retry |
 | ADMIN-03 | Phase 2 | Partial: manual retry/API key/admin user audit and audit read API done |
 | ADMIN-04 | Phase 2 | Done: Backend support report endpoint, UI/export button pending |
 | HEALTH-01 | Phase 2 | Done |
@@ -124,4 +124,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-02 after Admin user management checkpoint*
+*Last updated: 2026-06-02 after Admin UI shell checkpoint*

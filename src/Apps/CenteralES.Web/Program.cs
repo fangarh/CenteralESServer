@@ -44,7 +44,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseStaticFiles();
 
+app.MapAdminUiEndpoints();
 app.MapHealthEndpoints();
 app.MapPublicPdfEndpoints(pdfMaxUploadBytes);
 app.MapAdminAuthEndpoints();

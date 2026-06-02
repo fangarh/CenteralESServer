@@ -24,6 +24,23 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task Admin_ui_is_served_by_web_application()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/admin");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("Centeral ES Admin", html, StringComparison.Ordinal);
+        Assert.Contains("/admin/app.js", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Live_health_returns_healthy_status()
     {
         if (!HasConfiguredTestDatabase())
