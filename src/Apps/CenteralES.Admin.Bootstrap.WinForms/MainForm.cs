@@ -11,55 +11,80 @@ public sealed class MainForm : Form
     private readonly TextBox _loginTextBox = new();
     private readonly TextBox _passwordTextBox = new();
     private readonly TextBox _commentTextBox = new();
-    private readonly TextBox _statusTextBox = new();
+    private readonly TextBox _bootstrapStatusTextBox = new();
     private readonly Button _checkButton = new();
     private readonly Button _bootstrapButton = new();
     private readonly Button _clearConnectionButton = new();
 
+    private readonly TextBox _baseUrlTextBox = new();
+    private readonly TextBox _adminLoginTextBox = new();
+    private readonly TextBox _adminPasswordTextBox = new();
+    private readonly TextBox _apiKeyTextBox = new();
+    private readonly TextBox _pdfPathTextBox = new();
+    private readonly ComboBox _servicesComboBox = new();
+    private readonly TextBox _serviceStatusTextBox = new();
+    private readonly Button _loginHttpButton = new();
+    private readonly Button _loadServicesButton = new();
+    private readonly Button _testSelectedServiceButton = new();
+    private readonly Button _testAllServicesButton = new();
+    private readonly Button _selectPdfButton = new();
+
+    private IReadOnlyList<MvpServiceDescriptor> _services = [];
+    private MvpHttpTestClient? _mvpClient;
+    private Uri? _mvpClientBaseUri;
+    private bool _mvpClientLoggedIn;
+
     public MainForm()
     {
-        Text = "CenteralES Admin Bootstrap";
+        Text = "CenteralES MVP Test Client";
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(820, 620);
-        Size = new Size(900, 680);
+        MinimumSize = new Size(980, 760);
+        Size = new Size(1080, 820);
 
         BuildLayout();
     }
 
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _mvpClient?.Dispose();
+        }
+
+        base.Dispose(disposing);
+    }
+
     private void BuildLayout()
     {
-        var root = new TableLayoutPanel
+        var tabs = new TabControl
         {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(18),
-            ColumnCount = 1,
-            RowCount = 8
+            Dock = DockStyle.Fill
         };
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        var title = new Label
+        tabs.TabPages.Add(CreateBootstrapTab());
+        tabs.TabPages.Add(CreateServicesTab());
+        Controls.Add(tabs);
+    }
+
+    private TabPage CreateBootstrapTab()
+    {
+        var tab = new TabPage("Первый admin");
+        var root = CreateRootLayout(rowCount: 8);
+
+        root.Controls.Add(new Label
         {
             AutoSize = true,
             Font = new Font(Font, FontStyle.Bold),
             Text = "Первичный администратор CenteralES"
-        };
-        root.Controls.Add(title);
+        });
 
-        var description = new Label
+        root.Controls.Add(new Label
         {
             AutoSize = true,
-            MaximumSize = new Size(820, 0),
+            MaximumSize = new Size(900, 0),
             Margin = new Padding(0, 8, 0, 16),
             Text = "Тестовое WinForms-приложение применяет SQL-миграции и создает первого admin user только если активных администраторов еще нет. Пароль не выводится в статус и audit."
-        };
-        root.Controls.Add(description);
+        });
 
         _connectionStringTextBox.Multiline = true;
         _connectionStringTextBox.Height = 80;
@@ -87,11 +112,11 @@ public sealed class MainForm : Form
 
         _checkButton.Text = "Проверить подключение";
         _checkButton.AutoSize = true;
-        _checkButton.Click += async (_, _) => await RunOperationAsync(CheckConnectionAsync);
+        _checkButton.Click += async (_, _) => await RunOperationAsync(CheckConnectionAsync, WriteBootstrapStatus);
 
         _bootstrapButton.Text = "Создать первого администратора";
         _bootstrapButton.AutoSize = true;
-        _bootstrapButton.Click += async (_, _) => await RunOperationAsync(BootstrapAdminAsync);
+        _bootstrapButton.Click += async (_, _) => await RunOperationAsync(BootstrapAdminAsync, WriteBootstrapStatus);
 
         _clearConnectionButton.Text = "Очистить connection string";
         _clearConnectionButton.AutoSize = true;
@@ -102,14 +127,145 @@ public sealed class MainForm : Form
         buttons.Controls.Add(_clearConnectionButton);
         root.Controls.Add(buttons);
 
-        _statusTextBox.Multiline = true;
-        _statusTextBox.ReadOnly = true;
-        _statusTextBox.ScrollBars = ScrollBars.Vertical;
-        _statusTextBox.Dock = DockStyle.Fill;
-        _statusTextBox.Text = "Готово. Connection string можно оставить пустым, если рядом в дереве проекта есть db.env.";
-        root.Controls.Add(_statusTextBox);
+        ConfigureStatusTextBox(
+            _bootstrapStatusTextBox,
+            "Готово. Connection string можно оставить пустым, если рядом в дереве проекта есть db.env.");
+        root.Controls.Add(_bootstrapStatusTextBox);
 
-        Controls.Add(root);
+        tab.Controls.Add(root);
+        return tab;
+    }
+
+    private TabPage CreateServicesTab()
+    {
+        var tab = new TabPage("MVP сервисы");
+        var root = CreateRootLayout(rowCount: 9);
+
+        root.Controls.Add(new Label
+        {
+            AutoSize = true,
+            Font = new Font(Font, FontStyle.Bold),
+            Text = "Зарегистрированные MVP-сервисы и тесты"
+        });
+
+        root.Controls.Add(new Label
+        {
+            AutoSize = true,
+            MaximumSize = new Size(900, 0),
+            Margin = new Padding(0, 8, 0, 16),
+            Text = "Список берется из существующего Admin Settings endpoint. Сейчас сервер отдает один MVP-сервис pdf-stamp-recognition; универсального registry endpoint-а пока нет."
+        });
+
+        _baseUrlTextBox.Text = "http://localhost:5045";
+        root.Controls.Add(CreateLabeledControl("Web base URL", _baseUrlTextBox));
+
+        var adminCredentials = new TableLayoutPanel
+        {
+            AutoSize = true,
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            Margin = new Padding(0, 0, 0, 10)
+        };
+        adminCredentials.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        adminCredentials.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+
+        _adminLoginTextBox.PlaceholderText = "admin login";
+        _adminPasswordTextBox.UseSystemPasswordChar = true;
+        _adminPasswordTextBox.PlaceholderText = "admin password";
+        adminCredentials.Controls.Add(CreateLabeledControl("Admin login", _adminLoginTextBox), 0, 0);
+        adminCredentials.Controls.Add(CreateLabeledControl("Admin password", _adminPasswordTextBox), 1, 0);
+        root.Controls.Add(adminCredentials);
+
+        _apiKeyTextBox.UseSystemPasswordChar = true;
+        _apiKeyTextBox.PlaceholderText = "keyId.secret для функционального PDF-теста, необязательно";
+        root.Controls.Add(CreateLabeledControl("Public API key", _apiKeyTextBox));
+
+        root.Controls.Add(CreatePdfPicker());
+
+        var buttons = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0, 8, 0, 12)
+        };
+
+        _loginHttpButton.Text = "Войти в Admin API";
+        _loginHttpButton.AutoSize = true;
+        _loginHttpButton.Click += async (_, _) => await RunOperationAsync(LoginHttpAsync, WriteServiceStatus);
+
+        _loadServicesButton.Text = "Получить сервисы";
+        _loadServicesButton.AutoSize = true;
+        _loadServicesButton.Click += async (_, _) => await RunOperationAsync(LoadServicesAsync, WriteServiceStatus);
+
+        _testSelectedServiceButton.Text = "Тест выбранного";
+        _testSelectedServiceButton.AutoSize = true;
+        _testSelectedServiceButton.Click += async (_, _) => await RunOperationAsync(TestSelectedServiceAsync, WriteServiceStatus);
+
+        _testAllServicesButton.Text = "Тест всех";
+        _testAllServicesButton.AutoSize = true;
+        _testAllServicesButton.Click += async (_, _) => await RunOperationAsync(TestAllServicesAsync, WriteServiceStatus);
+
+        buttons.Controls.Add(_loginHttpButton);
+        buttons.Controls.Add(_loadServicesButton);
+        buttons.Controls.Add(_testSelectedServiceButton);
+        buttons.Controls.Add(_testAllServicesButton);
+        root.Controls.Add(buttons);
+
+        _servicesComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+        _servicesComboBox.Dock = DockStyle.Top;
+        root.Controls.Add(CreateLabeledControl("Сервисы", _servicesComboBox));
+
+        ConfigureStatusTextBox(
+            _serviceStatusTextBox,
+            "Готово. Войдите в Admin API, получите список сервисов и запустите проверки.");
+        root.Controls.Add(_serviceStatusTextBox);
+
+        tab.Controls.Add(root);
+        return tab;
+    }
+
+    private static TableLayoutPanel CreateRootLayout(int rowCount)
+    {
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(18),
+            ColumnCount = 1,
+            RowCount = rowCount
+        };
+
+        for (var index = 0; index < rowCount - 1; index++)
+        {
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        }
+
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        return root;
+    }
+
+    private Control CreatePdfPicker()
+    {
+        var panel = new TableLayoutPanel
+        {
+            AutoSize = true,
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            Margin = new Padding(0, 0, 0, 10)
+        };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        _pdfPathTextBox.PlaceholderText = "PDF-файл для функционального теста, необязательно";
+        panel.Controls.Add(CreateLabeledControl("PDF file", _pdfPathTextBox), 0, 0);
+
+        _selectPdfButton.Text = "Выбрать PDF";
+        _selectPdfButton.AutoSize = true;
+        _selectPdfButton.Margin = new Padding(8, 20, 0, 0);
+        _selectPdfButton.Click += (_, _) => SelectPdfFile();
+        panel.Controls.Add(_selectPdfButton, 1, 0);
+
+        return panel;
     }
 
     private static Control CreateLabeledControl(string labelText, Control control)
@@ -136,9 +292,20 @@ public sealed class MainForm : Form
         return panel;
     }
 
-    private async Task RunOperationAsync(Func<CancellationToken, Task> operation)
+    private static void ConfigureStatusTextBox(TextBox statusTextBox, string initialText)
     {
-        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        statusTextBox.Multiline = true;
+        statusTextBox.ReadOnly = true;
+        statusTextBox.ScrollBars = ScrollBars.Vertical;
+        statusTextBox.Dock = DockStyle.Fill;
+        statusTextBox.Text = initialText;
+    }
+
+    private async Task RunOperationAsync(
+        Func<CancellationToken, Task> operation,
+        Action<string> writeStatus)
+    {
+        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         SetBusy(true);
         try
         {
@@ -146,11 +313,11 @@ public sealed class MainForm : Form
         }
         catch (OperationCanceledException)
         {
-            WriteStatus("Операция прервана по timeout.");
+            writeStatus("Операция прервана по timeout.");
         }
         catch (Exception ex)
         {
-            WriteStatus($"Ошибка: {ex.Message}");
+            writeStatus($"Ошибка: {ex.Message}");
         }
         finally
         {
@@ -164,7 +331,7 @@ public sealed class MainForm : Form
         var bootstrapper = new PostgresAdminBootstrapper(dataSource);
         var activeAdmins = await bootstrapper.CountActiveAdminsAsync(cancellationToken);
 
-        WriteStatus($"Подключение и схема проверены. Активных администраторов: {activeAdmins}.");
+        WriteBootstrapStatus($"Подключение и схема проверены. Активных администраторов: {activeAdmins}.");
     }
 
     private async Task BootstrapAdminAsync(CancellationToken cancellationToken)
@@ -184,20 +351,147 @@ public sealed class MainForm : Form
         switch (result)
         {
             case AdminBootstrapUserSuccess success:
-                WriteStatus($"Первый администратор создан. Login: {success.User.Login}. Audit id: {success.AuditId:N}.");
+                WriteBootstrapStatus($"Первый администратор создан. Login: {success.User.Login}. Audit id: {success.AuditId:N}.");
                 break;
             case AdminBootstrapAlreadyInitialized initialized:
-                WriteStatus($"Bootstrap не выполнен: уже есть активные администраторы ({initialized.ActiveAdminCount}).");
+                WriteBootstrapStatus($"Bootstrap не выполнен: уже есть активные администраторы ({initialized.ActiveAdminCount}).");
                 break;
             case AdminBootstrapLoginConflict conflict:
-                WriteStatus($"Bootstrap не выполнен: login '{conflict.Login}' уже существует.");
+                WriteBootstrapStatus($"Bootstrap не выполнен: login '{conflict.Login}' уже существует.");
                 break;
             case AdminBootstrapInvalidInput invalidInput:
-                WriteStatus($"Bootstrap не выполнен: {invalidInput.Message}");
+                WriteBootstrapStatus($"Bootstrap не выполнен: {invalidInput.Message}");
                 break;
             default:
                 throw new InvalidOperationException($"Unknown bootstrap result '{result.GetType().Name}'.");
         }
+    }
+
+    private async Task LoginHttpAsync(CancellationToken cancellationToken)
+    {
+        var client = CreateOrReuseMvpClient();
+        var login = await client.LoginAsync(
+            _adminLoginTextBox.Text.Trim(),
+            _adminPasswordTextBox.Text,
+            cancellationToken);
+        _mvpClientLoggedIn = true;
+        WriteServiceStatus($"Admin API login выполнен. Пользователь: {login}.");
+    }
+
+    private async Task LoadServicesAsync(CancellationToken cancellationToken)
+    {
+        var client = await EnsureLoggedInMvpClientAsync(cancellationToken);
+        _services = await client.DiscoverServicesAsync(cancellationToken);
+
+        _servicesComboBox.Items.Clear();
+        foreach (var service in _services)
+        {
+            _servicesComboBox.Items.Add(service);
+        }
+
+        if (_servicesComboBox.Items.Count > 0)
+        {
+            _servicesComboBox.SelectedIndex = 0;
+        }
+
+        var lines = _services.Count == 0
+            ? ["Сервисы не найдены."]
+            : _services.Select(service =>
+                $"Найден сервис: capability={service.Capability}, processor={service.ProcessorKey}, recognizer={service.Recognizer}, endpoints={service.EndpointCount}, contract={service.ContractVersion}, maxUploadBytes={service.MaxUploadBytes?.ToString() ?? "unknown"}");
+
+        WriteServiceStatus(string.Join(Environment.NewLine, lines));
+    }
+
+    private async Task TestSelectedServiceAsync(CancellationToken cancellationToken)
+    {
+        var service = await GetSelectedOrFirstServiceAsync(cancellationToken);
+        var results = await _mvpClient!.TestServiceAsync(
+            service,
+            string.IsNullOrWhiteSpace(_apiKeyTextBox.Text) ? null : _apiKeyTextBox.Text,
+            string.IsNullOrWhiteSpace(_pdfPathTextBox.Text) ? null : _pdfPathTextBox.Text,
+            cancellationToken);
+
+        WriteServiceStatus(FormatTestResults(service, results));
+    }
+
+    private async Task TestAllServicesAsync(CancellationToken cancellationToken)
+    {
+        if (_services.Count == 0)
+        {
+            await LoadServicesAsync(cancellationToken);
+        }
+
+        if (_services.Count == 0)
+        {
+            WriteServiceStatus("Нет сервисов для тестирования.");
+            return;
+        }
+
+        var blocks = new List<string>();
+        foreach (var service in _services)
+        {
+            var results = await _mvpClient!.TestServiceAsync(
+                service,
+                string.IsNullOrWhiteSpace(_apiKeyTextBox.Text) ? null : _apiKeyTextBox.Text,
+                string.IsNullOrWhiteSpace(_pdfPathTextBox.Text) ? null : _pdfPathTextBox.Text,
+                cancellationToken);
+            blocks.Add(FormatTestResults(service, results));
+        }
+
+        WriteServiceStatus(string.Join($"{Environment.NewLine}{Environment.NewLine}", blocks));
+    }
+
+    private async Task<MvpServiceDescriptor> GetSelectedOrFirstServiceAsync(CancellationToken cancellationToken)
+    {
+        if (_services.Count == 0)
+        {
+            await LoadServicesAsync(cancellationToken);
+        }
+
+        return _servicesComboBox.SelectedItem as MvpServiceDescriptor
+            ?? _services.FirstOrDefault()
+            ?? throw new InvalidOperationException("Сначала получите список сервисов.");
+    }
+
+    private async Task<MvpHttpTestClient> EnsureLoggedInMvpClientAsync(CancellationToken cancellationToken)
+    {
+        var client = CreateOrReuseMvpClient();
+        if (_mvpClientLoggedIn)
+        {
+            return client;
+        }
+
+        await LoginHttpAsync(cancellationToken);
+        return _mvpClient!;
+    }
+
+    private MvpHttpTestClient CreateOrReuseMvpClient()
+    {
+        var baseUri = ResolveBaseUri();
+        if (_mvpClient is not null && _mvpClientBaseUri == baseUri)
+        {
+            return _mvpClient;
+        }
+
+        _mvpClient?.Dispose();
+        _mvpClient = new MvpHttpTestClient(baseUri);
+        _mvpClientBaseUri = baseUri;
+        _mvpClientLoggedIn = false;
+        _services = [];
+        _servicesComboBox.Items.Clear();
+        return _mvpClient;
+    }
+
+    private Uri ResolveBaseUri()
+    {
+        var configured = _baseUrlTextBox.Text.Trim();
+        if (!Uri.TryCreate(configured, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new InvalidOperationException("Web base URL должен быть абсолютным http/https URL.");
+        }
+
+        return uri;
     }
 
     private async Task<NpgsqlDataSource> CreateMigratedDataSourceAsync(CancellationToken cancellationToken)
@@ -219,16 +513,61 @@ public sealed class MainForm : Form
             AppContext.BaseDirectory);
     }
 
+    private void SelectPdfFile()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            CheckFileExists = true,
+            Filter = "PDF files (*.pdf)|*.pdf|All files (*.*)|*.*",
+            Title = "Выберите PDF для теста Public API"
+        };
+
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            _pdfPathTextBox.Text = dialog.FileName;
+        }
+    }
+
     private void SetBusy(bool busy)
     {
-        _checkButton.Enabled = !busy;
-        _bootstrapButton.Enabled = !busy;
-        _clearConnectionButton.Enabled = !busy;
+        foreach (var button in new[]
+        {
+            _checkButton,
+            _bootstrapButton,
+            _clearConnectionButton,
+            _loginHttpButton,
+            _loadServicesButton,
+            _testSelectedServiceButton,
+            _testAllServicesButton,
+            _selectPdfButton
+        })
+        {
+            button.Enabled = !busy;
+        }
+
         Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
     }
 
-    private void WriteStatus(string message)
+    private static string FormatTestResults(
+        MvpServiceDescriptor service,
+        IReadOnlyList<MvpServiceTestResult> results)
     {
-        _statusTextBox.Text = $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] {message}";
+        var lines = new List<string>
+        {
+            $"Сервис: {service.Capability} / {service.ProcessorKey}",
+            $"Recognizer: {service.Recognizer}, endpoints={service.EndpointCount}, contract={service.ContractVersion}"
+        };
+        lines.AddRange(results.Select(result => result.ToString()));
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private void WriteBootstrapStatus(string message)
+    {
+        _bootstrapStatusTextBox.Text = $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}] {message}";
+    }
+
+    private void WriteServiceStatus(string message)
+    {
+        _serviceStatusTextBox.Text = $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}]{Environment.NewLine}{message}";
     }
 }

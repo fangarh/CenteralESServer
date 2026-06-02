@@ -68,6 +68,7 @@ db.env, logon.env, .codex-local/ и test.pdf должны оставаться i
   src/Apps/CenteralES.Admin.Bootstrap.WinForms
 - Backend smoke для WinForms bootstrap path реализован:
   .codex-local/run-admin-bootstrap-smoke.ps1
+- WinForms test client расширен вкладкой `MVP сервисы`: получает текущий MVP service list через существующий `GET /api/admin/settings`, тестирует `/health/live`, `/health/ready`, passive processor status и опциональный Public PDF upload/polling при наличии API key и PDF.
 - ADMIN-03 закрыт для текущего MVP-набора dangerous actions.
 - Docker Compose еще не реализован.
 
@@ -94,12 +95,12 @@ db.env, logon.env, .codex-local/ и test.pdf должны оставаться i
 - C:\Users\Admin\.dotnet\dotnet.exe отсутствует в текущем окружении; проверки выполнялись системным dotnet.
 
 Следующий логичный шаг без Docker:
-Raw JSON controlled debug endpoint.
+Raw JSON controlled debug endpoint или обсуждение read-only service registry API, если нужен настоящий список нескольких зарегистрированных сервисов.
 
 Зачем:
 - PDF summary уже закрыт безопасными счетчиками и excerpts;
 - если нужен raw JSON, это должен быть отдельный controlled/debug endpoint;
-- WinForms bootstrap path покрыт backend smoke без запуска GUI.
+- WinForms client сейчас получает service list из `GET /api/admin/settings`, потому что отдельного registry endpoint-а в MVP нет.
 
 После этого следующий крупный блок:
 Docker Compose Delivery MVP:

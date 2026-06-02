@@ -56,6 +56,7 @@ D:\Projects\DT1520\CenteralESServer
   src/Apps/CenteralES.Admin.Bootstrap.WinForms
 - Backend smoke для WinForms bootstrap path реализован:
   .codex-local/run-admin-bootstrap-smoke.ps1
+- WinForms test client расширен вкладкой `MVP сервисы`: получает текущий MVP service list через существующий `GET /api/admin/settings`, тестирует `/health/live`, `/health/ready`, passive processor status и опциональный Public PDF upload/polling при наличии API key и PDF.
 - Docker Compose еще не реализован и сейчас исключен из работы.
 
 Проверки последнего WinForms bootstrap smoke checkpoint:
@@ -68,10 +69,11 @@ D:\Projects\DT1520\CenteralESServer
 - C:\Users\Admin\.dotnet\dotnet.exe отсутствует в текущем окружении; проверки выполнялись системным dotnet.
 
 Следующий логичный шаг без Docker:
-Raw JSON controlled debug endpoint.
+Raw JSON controlled debug endpoint или обсуждение read-only service registry API, если нужен настоящий список нескольких зарегистрированных сервисов.
 
 Зачем:
 - PDF summary уже закрыт безопасными счетчиками и excerpts;
 - если нужен raw JSON, это должен быть отдельный controlled/debug endpoint с явной границей доступа;
-- raw payload и входные PDF нельзя показывать в обычном Admin UI.
+- raw payload и входные PDF нельзя показывать в обычном Admin UI;
+- WinForms client сейчас получает service list из `GET /api/admin/settings`, потому что отдельного registry endpoint-а в MVP нет.
 ```

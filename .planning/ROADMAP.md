@@ -40,6 +40,7 @@ Scope:
 
 - API key model and auth middleware; baseline implemented, admin creation/rotation UI remains later in Phase 2/4;
 - admin login/session/CSRF baseline; backend baseline implemented, first-admin WinForms bootstrap app implemented and covered by backend smoke, broader UI/audit work continues in Phase 2/4;
+- WinForms test client can discover and test the current MVP service through existing Admin/Public API endpoints; a real multi-service registry endpoint remains future server work.
 - manual retry одной задачи; backend endpoint implemented, UI remains Phase 4;
 - audit для admin actions; current MVP dangerous actions and filtered Audit UI implemented;
 - health live/ready и Worker heartbeat; baseline already implemented in Phase 1, remaining work is hardening/admin visibility;
@@ -56,7 +57,7 @@ Scope:
 - Dockerfiles для Web и Worker;
 - docker-compose с PostgreSQL и shared local storage;
 - configuration examples;
-- first-admin bootstrap path; shared backend service, WinForms test app, and backend smoke implemented before Docker checkpoint;
+- first-admin bootstrap/test client path; shared backend service, WinForms app, MVP service testing, and backend smoke implemented before Docker checkpoint;
 - migration/bootstrap process без EF; explicit SQL runner baseline implemented before Docker checkpoint;
 - smoke tests для локальной поставки.
 
@@ -95,4 +96,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-02 after First Admin bootstrap smoke*
+*Last updated: 2026-06-02 after WinForms MVP service test client*

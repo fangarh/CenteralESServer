@@ -56,6 +56,7 @@
 - [x] **ADMIN-04**: Admin API отдаёт support report для Job Details без входного PDF, raw secrets и больших payload.
 - [x] **ADMIN-05**: Первый admin может быть создан повторяемым bootstrap tool без Web setup wizard и без вывода секретов.
 - [x] **ADMIN-06**: Admin Result Details показывает безопасный человекочитаемый summary PDF-result без raw payload.
+- [x] **ADMIN-07**: WinForms test client получает текущий MVP service list через существующие Admin API и запускает безопасные health/processor/Public API проверки без доработки сервера.
 - [x] **HEALTH-01**: Web предоставляет `/health/live` и `/health/ready`.
 - [x] **HEALTH-02**: Worker пишет heartbeat каждые `30 seconds`, stale threshold `3 minutes`.
 
@@ -118,16 +119,17 @@
 | ADMIN-04 | Phase 2 | Done: Backend support report endpoint plus UI download action |
 | ADMIN-05 | Phase 2 | Done: shared `IAdminBootstrapper` plus separate WinForms test bootstrap app, with backend smoke coverage for bootstrap -> login -> CSRF session validation |
 | ADMIN-06 | Phase 4 | Done: safe PDF stamp recognition summary in Admin Result Details |
+| ADMIN-07 | Phase 2 | Done: WinForms test client discovers current MVP service from `GET /api/admin/settings` and tests health, passive processor status, and optional Public PDF upload/polling |
 | HEALTH-01 | Phase 2 | Done: Web endpoints plus Admin UI Health screen |
 | HEALTH-02 | Phase 2 | Done |
 | DEPLOY-01 | Phase 3 | Pending |
 | DEPLOY-02 | Phase 3 | Pending |
 
 **Coverage:**
-- v1 requirements: 35 total
-- Mapped to phases: 35
+- v1 requirements: 36 total
+- Mapped to phases: 36
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-02 after First Admin bootstrap smoke*
+*Last updated: 2026-06-02 after WinForms MVP service test client*

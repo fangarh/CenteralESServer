@@ -794,6 +794,16 @@ src/Apps/CenteralES.Admin.Bootstrap.WinForms
 
 Приложение использует общий backend contract `IAdminBootstrapper` и PostgreSQL-реализацию `PostgresAdminBootstrapper`: применяет SQL migrations, проверяет количество активных администраторов и создаёт первого admin user только если активных администраторов ещё нет. Web setup wizard в MVP не делаем.
 
+То же WinForms-приложение расширено как тестовый MVP client:
+
+- вкладка `MVP сервисы` логинится в Admin API через `POST /api/admin/auth/login`;
+- получает текущий список MVP-сервисов из существующего `GET /api/admin/settings`;
+- для текущего MVP показывает `pdf-stamp-recognition / pdf2txt-http-recognizer`;
+- тестирует `/health/live`, `/health/ready` и passive processor status через `GET /api/admin/processors/{processorKey}`;
+- при указанном Public API key и PDF-файле дополнительно тестирует `POST /api/pdf-stamp-recognition/jobs` и polling `GET /api/pdf-stamp-recognition/results/{hash}`.
+
+Серверный registry endpoint для списка всех зарегистрированных сервисов пока не добавлялся. Для текущего MVP этого достаточно, потому что в поставке есть один процессор. Если появятся несколько capabilities/processors, нужен отдельный read-only registry API на стороне сервера.
+
 Bootstrap audit action:
 
 ```text
