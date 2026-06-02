@@ -551,6 +551,16 @@ unknown
 
 ## Audit
 
+Текущий backend skeleton read-only API:
+
+```http
+GET /api/admin/audit?action=&targetType=&targetId=&actor=&occurredFrom=&occurredTo=&limit=
+```
+
+Endpoint требует admin session cookie, но не требует `X-CSRF-Token`, так как не меняет состояние.
+
+Список audit возвращает только безопасные metadata-поля события: auditId, время, actor, action, target, comment и correlationId. `old_value_json`, `new_value_json` и `technical_metadata_json` не отдаются в общем списке, чтобы не раскрывать raw secrets и большие payload. Детализация значений может добавляться отдельным controlled endpoint-ом, если для конкретного action будет определен безопасный contract.
+
 Журнал действий:
 
 - кто выполнил действие;

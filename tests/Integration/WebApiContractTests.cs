@@ -381,6 +381,46 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task Admin_audit_api_lists_filtered_events_without_raw_values()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var admin = await CreateAdminClientAsync(_factory);
+        var blocked = await CreateBlockedProcessingJobAsync();
+        var occurredFrom = Uri.EscapeDataString(DateTimeOffset.UtcNow.AddMinutes(-5).ToString("O"));
+        var occurredTo = Uri.EscapeDataString(DateTimeOffset.UtcNow.AddMinutes(5).ToString("O"));
+        using var retryRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/admin/jobs/{blocked.JobId:N}/retry");
+        retryRequest.Headers.Add("X-CSRF-Token", admin.CsrfToken);
+        retryRequest.Content = JsonContent.Create(new { Comment = "retry from audit list test" });
+
+        var retry = await admin.Client.SendAsync(retryRequest);
+        var audit = await admin.Client.GetAsync(
+            $"/api/admin/audit?action=manual_retry_job&targetType=processing_job&targetId={blocked.JobId:N}&actor={Uri.EscapeDataString(admin.Login)}&occurredFrom={occurredFrom}&occurredTo={occurredTo}&limit=5");
+
+        Assert.Equal(HttpStatusCode.Accepted, retry.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, audit.StatusCode);
+
+        var body = await audit.Content.ReadAsStringAsync();
+        var payload = JsonSerializer.Deserialize<JsonElement>(body);
+        var events = payload.GetProperty("events").EnumerateArray().ToArray();
+
+        Assert.Single(events);
+        Assert.Equal(admin.Login, events[0].GetProperty("actorLogin").GetString());
+        Assert.Equal("manual_retry_job", events[0].GetProperty("action").GetString());
+        Assert.Equal("processing_job", events[0].GetProperty("targetType").GetString());
+        Assert.Equal(blocked.JobId.ToString("N"), events[0].GetProperty("targetId").GetString());
+        Assert.Equal("retry from audit list test", events[0].GetProperty("comment").GetString());
+        Assert.False(events[0].TryGetProperty("oldValue", out _));
+        Assert.False(events[0].TryGetProperty("newValue", out _));
+        Assert.False(events[0].TryGetProperty("technicalMetadata", out _));
+        Assert.DoesNotContain("old_value_json", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("new_value_json", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Admin_manual_retry_requires_csrf_and_creates_new_queued_attempt()
     {
         if (!HasConfiguredTestDatabase())

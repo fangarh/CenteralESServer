@@ -158,4 +158,8 @@ public interface IAdminProcessingReadStore
         string capability,
         int recentDiagnosticsLimit,
         CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<AdminAuditEventListItem>> ListAuditEventsAsync(
+        AdminAuditEventListQuery query,
+        CancellationToken cancellationToken);
 }

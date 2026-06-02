@@ -48,6 +48,7 @@ app.MapPublicPdfEndpoints(pdfMaxUploadBytes);
 app.MapAdminAuthEndpoints();
 app.MapAdminJobEndpoints();
 app.MapAdminProcessorEndpoints();
+app.MapAdminAuditEndpoints();
 
 app.Run();
 

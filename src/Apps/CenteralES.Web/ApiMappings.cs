@@ -164,6 +164,20 @@ internal static class ApiMappings
             audit.CorrelationId);
     }
 
+    public static AdminAuditEventResponse ToAdminAuditEventResponse(AdminAuditEventListItem audit)
+    {
+        return new AdminAuditEventResponse(
+            audit.AuditId.ToString("N"),
+            audit.OccurredAt,
+            audit.ActorAdminId?.ToString("N"),
+            audit.ActorLogin,
+            audit.Action,
+            audit.TargetType,
+            audit.TargetId,
+            audit.Comment,
+            audit.CorrelationId);
+    }
+
     public static AdminProcessorStatusResponse ToAdminProcessorStatusResponse(AdminProcessorStatus status)
     {
         return new AdminProcessorStatusResponse(

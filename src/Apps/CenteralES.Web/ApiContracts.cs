@@ -147,6 +147,19 @@ internal sealed record AdminJobSupportReportAuditEventResponse(
     string? Comment,
     string CorrelationId);
 
+internal sealed record AdminAuditListResponse(IReadOnlyList<AdminAuditEventResponse> Events);
+
+internal sealed record AdminAuditEventResponse(
+    string AuditId,
+    DateTimeOffset OccurredAt,
+    string? ActorAdminId,
+    string? ActorLogin,
+    string Action,
+    string TargetType,
+    string TargetId,
+    string? Comment,
+    string CorrelationId);
+
 internal sealed record AdminAttemptDiagnosticsResponse(
     string? Endpoint,
     double? DurationMs,
