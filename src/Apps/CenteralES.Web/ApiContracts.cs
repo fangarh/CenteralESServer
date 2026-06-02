@@ -204,6 +204,19 @@ internal sealed record AdminAuditEventResponse(
     string? Comment,
     string CorrelationId);
 
+internal sealed record AdminStorageResponse(AdminTemporaryStorageResponse Temporary);
+
+internal sealed record AdminTemporaryStorageResponse(
+    string Provider,
+    string Purpose,
+    string RootPath,
+    string Status,
+    long UsedBytes,
+    long? HardLimitBytes,
+    long? SoftLimitBytes,
+    long? AvailableFreeBytes,
+    long? MinimumFreeBytes);
+
 internal sealed record AdminApiKeyListResponse(IReadOnlyList<AdminApiKeyResponse> Keys);
 
 internal sealed record AdminApiKeyResponse(

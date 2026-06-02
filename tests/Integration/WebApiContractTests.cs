@@ -76,7 +76,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-6");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-7");
 
         Assert.Contains("job-details-panel", html, StringComparison.Ordinal);
         Assert.Contains("support-report-button", html, StringComparison.Ordinal);
@@ -94,7 +94,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-6");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-7");
 
         Assert.Contains("processors-tab", html, StringComparison.Ordinal);
         Assert.Contains("processor-workers-body", html, StringComparison.Ordinal);
@@ -113,7 +113,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-6");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-7");
 
         Assert.Contains("health-tab", html, StringComparison.Ordinal);
         Assert.Contains("health-checks-body", html, StringComparison.Ordinal);
@@ -132,13 +132,75 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-6");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-7");
 
         Assert.Contains("delivery-tab", html, StringComparison.Ordinal);
         Assert.Contains("delivery-components-body", html, StringComparison.Ordinal);
         Assert.Contains("delivery-runtime-list", html, StringComparison.Ordinal);
         Assert.Contains("renderDeliveryDetails", js, StringComparison.Ordinal);
         Assert.Contains("pdf2txt-http-recognizer", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Admin_ui_contains_storage_surface()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = _factory.CreateClient();
+        var html = await client.GetStringAsync("/admin");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-7");
+
+        Assert.Contains("storage-tab", html, StringComparison.Ordinal);
+        Assert.Contains("storage-summary-list", html, StringComparison.Ordinal);
+        Assert.Contains("storage-capacity-list", html, StringComparison.Ordinal);
+        Assert.Contains("renderStorageDetails", js, StringComparison.Ordinal);
+        Assert.Contains("/api/admin/storage", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Admin_storage_requires_admin_session()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/api/admin/storage");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("unauthorized", payload.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Admin_storage_returns_temporary_storage_capacity()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var admin = await CreateAdminClientAsync(_factory);
+        var response = await admin.Client.GetAsync("/api/admin/storage");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var temporary = payload.GetProperty("temporary");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("local", temporary.GetProperty("provider").GetString());
+        Assert.Equal("temporary-input", temporary.GetProperty("purpose").GetString());
+        Assert.Contains(
+            temporary.GetProperty("status").GetString(),
+            new[] { "healthy", "warning", "full" });
+        Assert.True(temporary.GetProperty("usedBytes").GetInt64() >= 0);
+        Assert.True(temporary.TryGetProperty("rootPath", out _));
+        Assert.True(temporary.TryGetProperty("hardLimitBytes", out _));
+        Assert.True(temporary.TryGetProperty("softLimitBytes", out _));
+        Assert.True(temporary.TryGetProperty("minimumFreeBytes", out _));
+        Assert.True(temporary.TryGetProperty("availableFreeBytes", out _));
     }
 
     [Fact]

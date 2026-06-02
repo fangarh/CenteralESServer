@@ -115,7 +115,7 @@ Storage:TemporaryMinimumFreeBytes
 
 Если `TemporaryHardLimitBytes` задан и текущий размер temporary storage плюс входящий файл превышает лимит, `POST /api/pdf-stamp-recognition/jobs` возвращает `503 temporary_storage_full` до сохранения файла. Если `TemporaryMinimumFreeBytes` задан, upload также блокируется, когда после входящего файла свободного места будет меньше настроенного минимума.
 
-`TemporarySoftLimitBytes` сейчас влияет на capacity status как warning; UI-предупреждение остаётся частью Admin Storage/Health screen.
+`TemporarySoftLimitBytes` влияет на capacity status как warning. Admin Storage screen показывает текущий статус, used bytes, soft/hard/min-free limits и операционный риск блокировки новых upload-ов.
 
 Поведение:
 

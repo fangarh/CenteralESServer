@@ -538,6 +538,18 @@ Optional diagnostic test
 - размер result artifacts;
 - retention policy read-only для MVP.
 
+Текущий backend/UI checkpoint:
+
+```http
+GET /api/admin/storage
+```
+
+```text
+/admin -> Storage
+```
+
+Первый экран `Storage` показывает read-only состояние temporary input storage: provider, purpose, root path, status, used bytes, soft/hard/min-free limits и доступное свободное место на volume. Экран не показывает список файлов, не отдаёт storage keys и не выполняет cleanup. Ручная очистка, retention policy и удаление файлов требуют отдельного действия с подтверждением и audit.
+
 ## Health
 
 `Health` входит в MVP как отдельный экран.

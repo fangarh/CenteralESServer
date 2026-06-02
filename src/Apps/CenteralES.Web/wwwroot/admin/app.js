@@ -7,6 +7,7 @@ const state = {
   audit: [],
   processor: null,
   health: null,
+  storage: null,
   selectedJobDetails: null,
   selectedSupportReport: null,
   activeTab: "overview"
@@ -18,6 +19,7 @@ const titles = {
   jobs: ["Задачи", "Упавшие задачи и ручной retry."],
   processors: ["Обработчик", "Пассивное состояние PDF-обработчика, очередь, workers и diagnostics."],
   health: ["Проверки", "Локальные readiness checks без внешнего pdf2txt-вызова."],
+  storage: ["Storage", "Временное хранилище, лимиты и риск блокировки новых upload-ов."],
   apiKeys: ["Ключи API", "Доступ клиента ЭП к публичному API."],
   users: ["Администраторы", "Учетные записи, пароли и отключение доступа."],
   audit: ["Аудит", "Журнал опасных admin-действий."]
@@ -109,6 +111,12 @@ function bindSessionActions() {
     renderOverview();
     showAlert("Поставка обновлена.");
   });
+  document.getElementById("refresh-storage-button").addEventListener("click", async () => {
+    await loadStorage();
+    renderStorageDetails();
+    renderOverview();
+    showAlert("Storage обновлен.");
+  });
   document.getElementById("logout-button").addEventListener("click", logout);
   document.getElementById("retry-detail-button").addEventListener("click", () => {
     if (state.selectedJobDetails) {
@@ -169,6 +177,7 @@ async function refreshData() {
       loadJobs(),
       loadProcessor(),
       loadHealth(),
+      loadStorage(),
       loadApiKeys(),
       loadUsers(),
       loadAudit()
@@ -220,6 +229,10 @@ async function loadAudit() {
   state.audit = response.events || [];
 }
 
+async function loadStorage() {
+  state.storage = await apiGet("/api/admin/storage");
+}
+
 function renderAll() {
   renderOverview();
   renderJobs();
@@ -230,6 +243,7 @@ function renderAll() {
   renderProcessorDetails();
   renderHealthDetails();
   renderDeliveryDetails();
+  renderStorageDetails();
 }
 
 function renderOverview() {
@@ -463,6 +477,58 @@ function renderDeliveryDetails() {
     `;
     body.appendChild(row);
   });
+}
+
+function renderStorageDetails() {
+  const temporary = state.storage?.temporary;
+  if (!temporary) {
+    renderDefinitionList("storage-summary-list", [
+      ["Provider", "Нет данных"],
+      ["Purpose", "Нет данных"],
+      ["Root path", "Нет данных"]
+    ]);
+    renderDefinitionList("storage-capacity-list", [
+      ["Status", "Нет данных"],
+      ["Used", "Нет данных"],
+      ["Soft limit", "Нет данных"],
+      ["Hard limit", "Нет данных"],
+      ["Minimum free", "Нет данных"],
+      ["Free on volume", "Нет данных"]
+    ]);
+    setText("storage-status", "Нет данных");
+    setText("storage-used", "0 B");
+    setText("storage-risk", "Storage еще не загружен.");
+    return;
+  }
+
+  setText("storage-status", translateStatus(temporary.status));
+  setText("storage-used", formatBytes(temporary.usedBytes));
+  setText("storage-risk", describeStorageRisk(temporary));
+
+  renderDefinitionList("storage-summary-list", [
+    ["Provider", temporary.provider],
+    ["Purpose", temporary.purpose],
+    ["Root path", temporary.rootPath]
+  ]);
+
+  renderDefinitionList("storage-capacity-list", [
+    ["Status", translateStatus(temporary.status)],
+    ["Used", formatBytes(temporary.usedBytes)],
+    ["Soft limit", formatBytes(temporary.softLimitBytes)],
+    ["Hard limit", formatBytes(temporary.hardLimitBytes)],
+    ["Minimum free", formatBytes(temporary.minimumFreeBytes)],
+    ["Free on volume", formatBytes(temporary.availableFreeBytes)]
+  ]);
+}
+
+function describeStorageRisk(temporary) {
+  if (temporary.status === "full") {
+    return "Новые PDF upload-ы будут заблокированы до освобождения места или изменения лимитов.";
+  }
+  if (temporary.status === "warning") {
+    return "Место приближается к soft limit, новые upload-ы пока разрешены.";
+  }
+  return "Capacity guard не блокирует новые upload-ы.";
 }
 
 function translateHealthCheckName(name) {
@@ -957,8 +1023,8 @@ function renderDefinitionList(id, rows) {
 }
 
 function statusPill(status) {
-  const kind = status === "active" || status === "completed" ? "ok"
-    : status === "disabled" || status === "failed" || status === "blocked" ? "danger"
+  const kind = status === "active" || status === "completed" || status === "healthy" ? "ok"
+    : status === "disabled" || status === "failed" || status === "blocked" || status === "full" ? "danger"
       : "warn";
   return `<span class="status-pill ${kind}">${escapeHtml(translateStatus(status))}</span>`;
 }
@@ -975,6 +1041,8 @@ function translateStatus(status) {
     active: "Активен",
     disabled: "Отключен",
     healthy: "Работает",
+    warning: "Предупреждение",
+    full: "Заполнено",
     unhealthy: "Проблема",
     unknown: "Нет данных",
     failed: "Ошибка",
@@ -1030,6 +1098,21 @@ function formatDuration(value) {
 
 function formatBool(value) {
   return value === true ? "Да" : value === false ? "Нет" : "Нет данных";
+}
+
+function formatBytes(value) {
+  if (typeof value !== "number") {
+    return "Не задано";
+  }
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let size = value;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  const precision = unitIndex === 0 ? 0 : 1;
+  return `${size.toFixed(precision)} ${units[unitIndex]}`;
 }
 
 function setText(id, value) {

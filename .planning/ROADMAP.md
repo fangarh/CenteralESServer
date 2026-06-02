@@ -69,7 +69,7 @@ Scope:
 - Dashboard как рабочая консоль;
 - Processors/Processor Details;
 - API Keys UI;
-- Storage screen;
+- Storage screen read-only baseline done; cleanup/retention actions remain later;
 - Health screen;
 - Audit screen;
 - Admin Users;
@@ -94,4 +94,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-01 after support report MVP checkpoint*
+*Last updated: 2026-06-02 after Admin Storage checkpoint*

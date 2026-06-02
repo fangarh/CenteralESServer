@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Centeral ES Admin</title>
-  <link rel="stylesheet" href="/admin/app.css?v=20260602-6">
+  <link rel="stylesheet" href="/admin/app.css?v=20260602-7">
 </head>
 <body>
   <div class="app-shell">
@@ -22,6 +22,7 @@
         <button class="nav-item" type="button" data-tab="jobs">Задачи</button>
         <button class="nav-item" type="button" data-tab="processors">Обработчик</button>
         <button class="nav-item" type="button" data-tab="health">Проверки</button>
+        <button class="nav-item" type="button" data-tab="storage">Storage</button>
         <button class="nav-item" type="button" data-tab="apiKeys">Ключи API</button>
         <button class="nav-item" type="button" data-tab="users">Администраторы</button>
         <button class="nav-item" type="button" data-tab="audit">Аудит</button>
@@ -351,6 +352,53 @@
           </div>
         </section>
 
+        <section id="storage-tab" class="tab-panel" hidden>
+          <div class="section-band">
+            <div class="section-header">
+              <div>
+                <h2>Storage</h2>
+                <p>Временное хранилище входных PDF, лимиты и риск блокировки новых upload-ов.</p>
+              </div>
+              <button id="refresh-storage-button" class="secondary-button" type="button">Обновить storage</button>
+            </div>
+            <div class="summary-grid storage-summary">
+              <div class="summary-tile">
+                <span class="tile-label">Состояние</span>
+                <strong id="storage-status">Нет данных</strong>
+                <span>temporary input storage</span>
+              </div>
+              <div class="summary-tile">
+                <span class="tile-label">Использовано</span>
+                <strong id="storage-used">0 B</strong>
+                <span>сумма файлов в temporary root</span>
+              </div>
+              <div class="summary-tile wide-tile">
+                <span class="tile-label">Операционный вывод</span>
+                <strong id="storage-risk">Нет данных</strong>
+                <span>очистка руками из UI не входит в этот checkpoint</span>
+              </div>
+            </div>
+            <div class="details-grid">
+              <div class="detail-block">
+                <h3>Размещение</h3>
+                <dl id="storage-summary-list" class="kv-list"></dl>
+              </div>
+              <div class="detail-block">
+                <h3>Capacity guard</h3>
+                <dl id="storage-capacity-list" class="kv-list"></dl>
+              </div>
+            </div>
+            <div class="detail-block">
+              <h3>Граница MVP</h3>
+              <div class="report-summary">
+                <div>Экран показывает только агрегированное состояние temporary storage и не раскрывает список файлов.</div>
+                <div>Новые upload-ы блокируются backend-ом при hard limit или недостатке свободного места.</div>
+                <div>Очистка, retention policy и ручное удаление файлов требуют отдельного действия с подтверждением и audit.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="apiKeys-tab" class="tab-panel" hidden>
           <div class="section-band">
             <div class="section-header">
@@ -466,6 +514,6 @@
     </form>
   </dialog>
 
-  <script src="/admin/app.js?v=20260602-6"></script>
+  <script src="/admin/app.js?v=20260602-7"></script>
 </body>
 </html>

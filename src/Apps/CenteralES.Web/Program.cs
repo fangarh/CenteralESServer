@@ -29,6 +29,7 @@ builder.Services.AddSingleton<IProcessingJobQueue, PostgresProcessingJobQueue>()
 builder.Services.AddSingleton<IPdfStampRecognitionResultStore, PostgresPdfStampRecognitionResultStore>();
 builder.Services.AddSingleton<ITemporaryFileStore>(_ => new LocalTemporaryFileStore(temporaryStorageRoot));
 builder.Services.AddSingleton<ITemporaryStorageMonitor>(_ => new LocalTemporaryStorageMonitor(temporaryStorageRoot, temporaryStorageLimits));
+builder.Services.AddSingleton(new AdminStorageOptions(temporaryStorageRoot));
 builder.Services.AddSingleton<IAdminProcessingReadStore, PostgresAdminProcessingReadStore>();
 builder.Services.AddSingleton<IAdminProcessingActionStore, PostgresAdminProcessingActionStore>();
 builder.Services.AddSingleton<IAdminApiKeyStore, PostgresAdminApiKeyStore>();
@@ -53,6 +54,7 @@ app.MapAdminAuthEndpoints();
 app.MapAdminJobEndpoints();
 app.MapAdminProcessorEndpoints();
 app.MapAdminAuditEndpoints();
+app.MapAdminStorageEndpoints();
 app.MapAdminApiKeyEndpoints();
 app.MapAdminUserEndpoints();
 
