@@ -60,6 +60,7 @@ app.MapAdminAuditEndpoints();
 app.MapAdminStorageEndpoints();
 app.MapAdminResultEndpoints();
 app.MapAdminSettingsEndpoints();
+app.MapAdminServiceRegistryEndpoints();
 app.MapAdminApiKeyEndpoints();
 app.MapAdminUserEndpoints();
 

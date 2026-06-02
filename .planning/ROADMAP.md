@@ -40,7 +40,7 @@ Scope:
 
 - API key model and auth middleware; baseline implemented, admin creation/rotation UI remains later in Phase 2/4;
 - admin login/session/CSRF baseline; backend baseline implemented, first-admin WinForms bootstrap app implemented and covered by backend smoke, broader UI/audit work continues in Phase 2/4;
-- WinForms test client can discover and test the current MVP service through existing Admin/Public API endpoints; a real multi-service registry endpoint remains future server work.
+- read-only Admin Services registry endpoint implemented for the registered MVP service; WinForms test client discovers and tests services through this registry plus existing Admin/Public API endpoints.
 - manual retry одной задачи; backend endpoint implemented, UI remains Phase 4;
 - audit для admin actions; current MVP dangerous actions and filtered Audit UI implemented;
 - health live/ready и Worker heartbeat; baseline already implemented in Phase 1, remaining work is hardening/admin visibility;
@@ -96,4 +96,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-02 after WinForms MVP service test client*
+*Last updated: 2026-06-02 after Admin Services registry API*

@@ -5,8 +5,7 @@ internal sealed record MvpServiceDescriptor(
     string ProcessorKey,
     string Recognizer,
     int EndpointCount,
-    string ContractVersion,
-    long? MaxUploadBytes)
+    string ContractVersion)
 {
     public override string ToString()
     {

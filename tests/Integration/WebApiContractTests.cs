@@ -264,6 +264,56 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task Admin_services_requires_admin_session()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/api/admin/services");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("unauthorized", payload.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Admin_services_returns_registered_mvp_services_without_secrets()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var admin = await CreateAdminClientAsync(_factory);
+        var response = await admin.Client.GetAsync("/api/admin/services");
+        var body = await response.Content.ReadAsStringAsync();
+        var payload = JsonSerializer.Deserialize<JsonElement>(body);
+        var services = payload.GetProperty("services");
+        var service = services.EnumerateArray().Single();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("pdf-stamp-recognition", service.GetProperty("capability").GetString());
+        Assert.Equal("pdf2txt-http-recognizer", service.GetProperty("processorKey").GetString());
+        Assert.Equal("PDF stamp recognition", service.GetProperty("displayName").GetString());
+        Assert.True(service.GetProperty("enabled").GetBoolean());
+        Assert.Equal("passive", service.GetProperty("statusSource").GetString());
+        Assert.Equal("/api/admin/processors/pdf2txt-http-recognizer", service.GetProperty("adminStatusEndpoint").GetString());
+        Assert.Contains(
+            service.GetProperty("testCapabilities").EnumerateArray(),
+            item => item.GetString() == "public-pdf-upload");
+        Assert.Contains(
+            service.GetProperty("publicEndpoints").EnumerateArray(),
+            item => item.GetProperty("path").GetString() == "/api/pdf-stamp-recognition/jobs");
+        Assert.DoesNotContain("password", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("connectionString", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CENTERALES_PROCESSING_DATABASE", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Admin_results_requires_admin_session()
     {
         if (!HasConfiguredTestDatabase())

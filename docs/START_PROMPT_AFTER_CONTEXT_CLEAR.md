@@ -56,7 +56,8 @@ D:\Projects\DT1520\CenteralESServer
   src/Apps/CenteralES.Admin.Bootstrap.WinForms
 - Backend smoke для WinForms bootstrap path реализован:
   .codex-local/run-admin-bootstrap-smoke.ps1
-- WinForms test client расширен вкладкой `MVP сервисы`: получает текущий MVP service list через существующий `GET /api/admin/settings`, тестирует `/health/live`, `/health/ready`, passive processor status и опциональный Public PDF upload/polling при наличии API key и PDF.
+- Admin Services registry API реализован: `GET /api/admin/services` возвращает read-only список зарегистрированных MVP-сервисов без секретов и без активного вызова внешних processor-ов.
+- WinForms test client расширен вкладкой `MVP сервисы`: получает текущий MVP service list через `GET /api/admin/services`, тестирует `/health/live`, `/health/ready`, passive processor status и опциональный Public PDF upload/polling при наличии API key и PDF.
 - Docker Compose еще не реализован и сейчас исключен из работы.
 
 Проверки последнего WinForms bootstrap smoke checkpoint:
@@ -65,15 +66,15 @@ D:\Projects\DT1520\CenteralESServer
 - dotnet build CenteralESServer.sln --no-restore -maxcpucount:1 -v:minimal
   Результат: passed
 - dotnet test CenteralESServer.sln --no-build --no-restore -maxcpucount:1 -v:minimal
-  Результат: 50 unit + 49 integration passed
+  Результат: 50 unit + 51 integration passed
 - C:\Users\Admin\.dotnet\dotnet.exe отсутствует в текущем окружении; проверки выполнялись системным dotnet.
 
 Следующий логичный шаг без Docker:
-Raw JSON controlled debug endpoint или обсуждение read-only service registry API, если нужен настоящий список нескольких зарегистрированных сервисов.
+Raw JSON controlled debug endpoint.
 
 Зачем:
 - PDF summary уже закрыт безопасными счетчиками и excerpts;
 - если нужен raw JSON, это должен быть отдельный controlled/debug endpoint с явной границей доступа;
 - raw payload и входные PDF нельзя показывать в обычном Admin UI;
-- WinForms client сейчас получает service list из `GET /api/admin/settings`, потому что отдельного registry endpoint-а в MVP нет.
+- WinForms client теперь использует `GET /api/admin/services`, поэтому registry-долг для текущего MVP закрыт.
 ```

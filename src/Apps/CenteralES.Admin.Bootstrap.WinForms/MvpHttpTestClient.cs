@@ -47,7 +47,7 @@ internal sealed class MvpHttpTestClient : IDisposable
 
     public async Task<IReadOnlyList<MvpServiceDescriptor>> DiscoverServicesAsync(CancellationToken cancellationToken)
     {
-        using var response = await _httpClient.GetAsync("/api/admin/settings", cancellationToken);
+        using var response = await _httpClient.GetAsync("/api/admin/services", cancellationToken);
         using var document = await ReadJsonAsync(response, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
@@ -55,20 +55,16 @@ internal sealed class MvpHttpTestClient : IDisposable
             throw new InvalidOperationException($"Service discovery failed: {ReadError(document)}");
         }
 
-        var root = document.RootElement;
-        var processor = root.GetProperty("processor");
-        var publicApi = root.GetProperty("publicApi");
-
-        return
-        [
-            new MvpServiceDescriptor(
-                ReadRequiredString(processor, "capability"),
-                ReadRequiredString(processor, "processorKey"),
-                ReadRequiredString(processor, "recognizer"),
-                ReadInt(processor, "endpointCount"),
-                ReadRequiredString(processor, "contractVersion"),
-                ReadNullableLong(publicApi, "maxUploadBytes"))
-        ];
+        return document.RootElement
+            .GetProperty("services")
+            .EnumerateArray()
+            .Select(service => new MvpServiceDescriptor(
+                ReadRequiredString(service, "capability"),
+                ReadRequiredString(service, "processorKey"),
+                ReadRequiredString(service, "recognizer"),
+                ReadInt(service, "endpointCount"),
+                ReadRequiredString(service, "contractVersion")))
+            .ToArray();
     }
 
     public async Task<IReadOnlyList<MvpServiceTestResult>> TestServiceAsync(
@@ -315,10 +311,4 @@ internal sealed class MvpHttpTestClient : IDisposable
             : 0;
     }
 
-    private static long? ReadNullableLong(JsonElement element, string propertyName)
-    {
-        return element.TryGetProperty(propertyName, out var property) && property.TryGetInt64(out var value)
-            ? value
-            : null;
-    }
 }

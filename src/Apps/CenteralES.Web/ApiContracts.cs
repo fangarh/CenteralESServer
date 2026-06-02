@@ -249,6 +249,28 @@ internal sealed record AdminSettingsBoundaryResponse(
     bool EditingEnabled,
     string Note);
 
+internal sealed record AdminServiceRegistryResponse(IReadOnlyList<AdminRegisteredServiceResponse> Services);
+
+internal sealed record AdminRegisteredServiceResponse(
+    string Capability,
+    string ProcessorKey,
+    string DisplayName,
+    string Description,
+    bool Enabled,
+    string Recognizer,
+    int EndpointCount,
+    string ContractVersion,
+    string StatusSource,
+    string AdminStatusEndpoint,
+    string? AdminSettingsEndpoint,
+    IReadOnlyList<string> TestCapabilities,
+    IReadOnlyList<AdminServicePublicEndpointResponse> PublicEndpoints);
+
+internal sealed record AdminServicePublicEndpointResponse(
+    string Method,
+    string Path,
+    string Purpose);
+
 internal sealed record AdminResultListResponse(IReadOnlyList<AdminResultResponse> Results);
 
 internal sealed record AdminResultResponse(

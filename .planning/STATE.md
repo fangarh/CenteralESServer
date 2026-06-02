@@ -104,6 +104,7 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - 2026-06-02: Admin Result Details now includes a safe PDF stamp recognition summary for `pdf_stamp_recognition_results`: worker group/item counts, worker page count/page keys, unrecognized page/error counts, optional `izm_number`, and short error excerpts without returning raw JSON payload or input PDF.
 - 2026-06-02: First-admin bootstrap backend smoke added: integration coverage verifies schema bootstrap, first admin creation, admin login, CSRF session validation, and repeated bootstrap rejection; local ignored helper `.codex-local/run-admin-bootstrap-smoke.ps1` runs only this slice.
 - 2026-06-02: WinForms test client expanded beyond first-admin bootstrap: the new MVP Services tab logs into Admin API, discovers the current MVP service from existing `GET /api/admin/settings`, tests `/health/live`, `/health/ready`, passive processor status, and can optionally run Public PDF upload/polling when an API key and PDF are provided. No server endpoint changes were made; a future multi-service registry would need a separate read-only server API.
+- 2026-06-02: Admin Services read-only registry API added through `GET /api/admin/services`; it returns the registered MVP service metadata for `pdf-stamp-recognition / pdf2txt-http-recognizer`, public/admin endpoint paths, test capability flags, and passive status source without secrets or connection strings. WinForms test client now discovers services from this registry instead of `GET /api/admin/settings`.
 
 ## Workflow Rules
 
@@ -113,4 +114,4 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-06-02 after WinForms MVP service test client*
+*Last updated: 2026-06-02 after Admin Services registry API*

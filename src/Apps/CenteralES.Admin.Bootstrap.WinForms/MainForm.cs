@@ -153,7 +153,7 @@ public sealed class MainForm : Form
             AutoSize = true,
             MaximumSize = new Size(900, 0),
             Margin = new Padding(0, 8, 0, 16),
-            Text = "Список берется из существующего Admin Settings endpoint. Сейчас сервер отдает один MVP-сервис pdf-stamp-recognition; универсального registry endpoint-а пока нет."
+            Text = "Список берется из read-only Admin Services registry. Сейчас сервер отдает один MVP-сервис pdf-stamp-recognition."
         });
 
         _baseUrlTextBox.Text = "http://localhost:5045";
@@ -397,7 +397,7 @@ public sealed class MainForm : Form
         var lines = _services.Count == 0
             ? ["Сервисы не найдены."]
             : _services.Select(service =>
-                $"Найден сервис: capability={service.Capability}, processor={service.ProcessorKey}, recognizer={service.Recognizer}, endpoints={service.EndpointCount}, contract={service.ContractVersion}, maxUploadBytes={service.MaxUploadBytes?.ToString() ?? "unknown"}");
+                $"Найден сервис: capability={service.Capability}, processor={service.ProcessorKey}, recognizer={service.Recognizer}, endpoints={service.EndpointCount}, contract={service.ContractVersion}");
 
         WriteServiceStatus(string.Join(Environment.NewLine, lines));
     }
