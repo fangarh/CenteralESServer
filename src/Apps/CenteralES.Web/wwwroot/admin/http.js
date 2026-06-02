@@ -18,12 +18,12 @@
     async function fetchJson(url, requestOptions = {}, requireAuth = true) {
       const response = await fetch(url, {
         credentials: "same-origin",
+        ...requestOptions,
         headers: {
           "Accept": "application/json",
           "Content-Type": "application/json",
           ...(requestOptions.headers || {})
-        },
-        ...requestOptions
+        }
       });
 
       if (!response.ok) {

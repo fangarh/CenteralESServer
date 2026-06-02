@@ -232,6 +232,13 @@ function bindSessionActions() {
 async function restoreSession() {
   try {
     const response = await apiGet("/api/admin/auth/me", false);
+    if (!state.csrfToken) {
+      state.admin = null;
+      sessionStorage.removeItem("centerales.csrfToken");
+      setAuthenticated(false);
+      return;
+    }
+
     state.admin = response.admin;
     setAuthenticated(true);
     await refreshData();
