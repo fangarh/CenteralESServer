@@ -396,6 +396,18 @@ Support report включает audit context только по связанно
 - expiresAt nullable;
 - audit.
 
+Текущий backend skeleton:
+
+```http
+GET /api/admin/api-keys?keyId=&active=&limit=
+POST /api/admin/api-keys
+POST /api/admin/api-keys/{keyId}/disable
+```
+
+`GET` требует admin session cookie. `POST` endpoint-ы требуют admin session cookie и `X-CSRF-Token`.
+
+Создание ключа возвращает `secret` только один раз в ответе `POST /api/admin/api-keys`; список ключей и disable-response не возвращают secret или secret hash. `create_api_key` и `disable_api_key` пишутся в append-only audit без raw secret/hash.
+
 Опасные действия с ключами требуют подтверждения:
 
 ```text

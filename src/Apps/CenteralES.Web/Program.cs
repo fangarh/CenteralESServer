@@ -31,6 +31,7 @@ builder.Services.AddSingleton<ITemporaryFileStore>(_ => new LocalTemporaryFileSt
 builder.Services.AddSingleton<ITemporaryStorageMonitor>(_ => new LocalTemporaryStorageMonitor(temporaryStorageRoot, temporaryStorageLimits));
 builder.Services.AddSingleton<IAdminProcessingReadStore, PostgresAdminProcessingReadStore>();
 builder.Services.AddSingleton<IAdminProcessingActionStore, PostgresAdminProcessingActionStore>();
+builder.Services.AddSingleton<IAdminApiKeyStore, PostgresAdminApiKeyStore>();
 
 var app = builder.Build();
 
@@ -49,6 +50,7 @@ app.MapAdminAuthEndpoints();
 app.MapAdminJobEndpoints();
 app.MapAdminProcessorEndpoints();
 app.MapAdminAuditEndpoints();
+app.MapAdminApiKeyEndpoints();
 
 app.Run();
 

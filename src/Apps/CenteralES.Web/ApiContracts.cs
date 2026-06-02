@@ -160,6 +160,46 @@ internal sealed record AdminAuditEventResponse(
     string? Comment,
     string CorrelationId);
 
+internal sealed record AdminApiKeyListResponse(IReadOnlyList<AdminApiKeyResponse> Keys);
+
+internal sealed record AdminApiKeyResponse(
+    string KeyId,
+    string Name,
+    bool IsActive,
+    IReadOnlyList<string> AllowedCapabilities,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? ExpiresAt,
+    DateTimeOffset? LastUsedAt,
+    DateTimeOffset? DisabledAt);
+
+internal sealed record AdminCreateApiKeyRequestBody(
+    string? KeyId,
+    string? Name,
+    IReadOnlyList<string>? AllowedCapabilities,
+    DateTimeOffset? ExpiresAt,
+    string? Comment);
+
+internal sealed record AdminCreateApiKeyResponse(
+    string KeyId,
+    string Name,
+    bool IsActive,
+    IReadOnlyList<string> AllowedCapabilities,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? ExpiresAt,
+    string Secret,
+    string AuditId);
+
+internal sealed record AdminDisableApiKeyRequestBody(string? Comment);
+
+internal sealed record AdminDisableApiKeyResponse(
+    string KeyId,
+    string Name,
+    bool IsActive,
+    DateTimeOffset? DisabledAt,
+    string AuditId);
+
 internal sealed record AdminAttemptDiagnosticsResponse(
     string? Endpoint,
     double? DurationMs,

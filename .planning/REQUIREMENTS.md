@@ -93,7 +93,7 @@
 | API-04 | Phase 1 | Done |
 | SEC-01 | Phase 2 | Done |
 | SEC-02 | Phase 2 | Done |
-| SEC-03 | Phase 2 | Done |
+| SEC-03 | Phase 2 | Done: auth enforcement plus Admin create/list/disable backend |
 | SEC-04 | Phase 2 | Done |
 | QUEUE-01 | Phase 1 | Done |
 | QUEUE-02 | Phase 1 | Done |
@@ -110,7 +110,7 @@
 | STORE-04 | Phase 2 | Done |
 | ADMIN-01 | Phase 1 | Partial: Admin API done, UI pending |
 | ADMIN-02 | Phase 2 | Done: Backend endpoint, UI pending |
-| ADMIN-03 | Phase 2 | Partial: manual retry audit and audit read API done |
+| ADMIN-03 | Phase 2 | Partial: manual retry/API key audit and audit read API done |
 | ADMIN-04 | Phase 2 | Done: Backend support report endpoint, UI/export button pending |
 | HEALTH-01 | Phase 2 | Done |
 | HEALTH-02 | Phase 2 | Done |
@@ -124,4 +124,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-02 after Admin audit read API checkpoint*
+*Last updated: 2026-06-02 after Admin API key management checkpoint*

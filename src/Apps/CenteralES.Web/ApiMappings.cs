@@ -178,6 +178,44 @@ internal static class ApiMappings
             audit.CorrelationId);
     }
 
+    public static AdminApiKeyResponse ToAdminApiKeyResponse(AdminApiKeyListItem key)
+    {
+        return new AdminApiKeyResponse(
+            key.KeyId,
+            key.Name,
+            key.IsActive,
+            key.AllowedCapabilities,
+            key.CreatedAt,
+            key.UpdatedAt,
+            key.ExpiresAt,
+            key.LastUsedAt,
+            key.DisabledAt);
+    }
+
+    public static AdminCreateApiKeyResponse ToAdminCreateApiKeyResponse(AdminCreateApiKeySuccess success)
+    {
+        return new AdminCreateApiKeyResponse(
+            success.Key.KeyId,
+            success.Key.Name,
+            success.Key.IsActive,
+            success.Key.AllowedCapabilities,
+            success.Key.CreatedAt,
+            success.Key.UpdatedAt,
+            success.Key.ExpiresAt,
+            success.Secret,
+            success.AuditId.ToString("N"));
+    }
+
+    public static AdminDisableApiKeyResponse ToAdminDisableApiKeyResponse(AdminDisableApiKeySuccess success)
+    {
+        return new AdminDisableApiKeyResponse(
+            success.Key.KeyId,
+            success.Key.Name,
+            success.Key.IsActive,
+            success.Key.DisabledAt,
+            success.AuditId.ToString("N"));
+    }
+
     public static AdminProcessorStatusResponse ToAdminProcessorStatusResponse(AdminProcessorStatus status)
     {
         return new AdminProcessorStatusResponse(

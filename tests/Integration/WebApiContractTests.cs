@@ -421,6 +421,83 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task Admin_api_keys_can_be_created_listed_disabled_and_audited()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var admin = await CreateAdminClientAsync(_factory);
+        var keyId = $"adm_{Guid.NewGuid():N}";
+        var createWithoutCsrf = await admin.Client.PostAsJsonAsync(
+            "/api/admin/api-keys",
+            new
+            {
+                KeyId = keyId,
+                Name = "Integration API key",
+                AllowedCapabilities = new[] { PdfStampRecognitionConstants.Capability }
+            });
+
+        using var createRequest = new HttpRequestMessage(HttpMethod.Post, "/api/admin/api-keys");
+        createRequest.Headers.Add("X-CSRF-Token", admin.CsrfToken);
+        createRequest.Content = JsonContent.Create(new
+        {
+            KeyId = keyId,
+            Name = "Integration API key",
+            AllowedCapabilities = new[] { PdfStampRecognitionConstants.Capability }
+        });
+        var create = await admin.Client.SendAsync(createRequest);
+
+        Assert.Equal(HttpStatusCode.Forbidden, createWithoutCsrf.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+
+        var created = await create.Content.ReadFromJsonAsync<JsonElement>();
+        var secret = created.GetProperty("secret").GetString();
+
+        var listAfterCreate = await admin.Client.GetAsync($"/api/admin/api-keys?keyId={Uri.EscapeDataString(keyId)}");
+        var listPayload = await listAfterCreate.Content.ReadFromJsonAsync<JsonElement>();
+        var keys = listPayload.GetProperty("keys").EnumerateArray().ToArray();
+
+        var publicClient = _factory.CreateClient();
+        publicClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("ApiKey", $"{keyId}.{secret}");
+        var authorizedBeforeDisable = await publicClient.GetAsync("/api/pdf-stamp-recognition/results/sha256:missing");
+
+        using var disableRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/admin/api-keys/{keyId}/disable");
+        disableRequest.Headers.Add("X-CSRF-Token", admin.CsrfToken);
+        disableRequest.Content = JsonContent.Create(new { Comment = "disable from integration test" });
+        var disable = await admin.Client.SendAsync(disableRequest);
+
+        var unauthorizedAfterDisable = await publicClient.GetAsync("/api/pdf-stamp-recognition/results/sha256:missing");
+        var audit = await admin.Client.GetAsync($"/api/admin/audit?targetType=api_key&targetId={Uri.EscapeDataString(keyId)}&limit=10");
+        var auditBody = await audit.Content.ReadAsStringAsync();
+        var auditPayload = JsonSerializer.Deserialize<JsonElement>(auditBody);
+        var auditEvents = auditPayload.GetProperty("events").EnumerateArray().ToArray();
+
+        Assert.Equal(keyId, created.GetProperty("keyId").GetString());
+        Assert.Equal("Integration API key", created.GetProperty("name").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(secret));
+        Assert.False(created.TryGetProperty("secretHash", out _));
+
+        Assert.Equal(HttpStatusCode.OK, listAfterCreate.StatusCode);
+        Assert.Single(keys);
+        Assert.Equal(keyId, keys[0].GetProperty("keyId").GetString());
+        Assert.True(keys[0].GetProperty("isActive").GetBoolean());
+        Assert.False(keys[0].TryGetProperty("secret", out _));
+        Assert.False(keys[0].TryGetProperty("secretHash", out _));
+
+        Assert.Equal(HttpStatusCode.NotFound, authorizedBeforeDisable.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, disable.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthorizedAfterDisable.StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, audit.StatusCode);
+        Assert.Contains(auditEvents, item => item.GetProperty("action").GetString() == "create_api_key");
+        Assert.Contains(auditEvents, item => item.GetProperty("action").GetString() == "disable_api_key");
+        Assert.DoesNotContain(secret!, auditBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret_hash", auditBody, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Admin_manual_retry_requires_csrf_and_creates_new_queued_attempt()
     {
         if (!HasConfiguredTestDatabase())
