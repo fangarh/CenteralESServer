@@ -76,7 +76,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-4");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-5");
 
         Assert.Contains("job-details-panel", html, StringComparison.Ordinal);
         Assert.Contains("support-report-button", html, StringComparison.Ordinal);
@@ -94,13 +94,32 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-4");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-5");
 
         Assert.Contains("processors-tab", html, StringComparison.Ordinal);
         Assert.Contains("processor-workers-body", html, StringComparison.Ordinal);
         Assert.Contains("processor-diagnostics-body", html, StringComparison.Ordinal);
         Assert.Contains("renderProcessorDetails", js, StringComparison.Ordinal);
         Assert.Contains("/api/admin/processors/pdf2txt-http-recognizer", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Admin_ui_contains_health_surface()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = _factory.CreateClient();
+        var html = await client.GetStringAsync("/admin");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-5");
+
+        Assert.Contains("health-tab", html, StringComparison.Ordinal);
+        Assert.Contains("health-checks-body", html, StringComparison.Ordinal);
+        Assert.Contains("renderHealthDetails", js, StringComparison.Ordinal);
+        Assert.Contains("/health/live", js, StringComparison.Ordinal);
+        Assert.Contains("/health/ready", js, StringComparison.Ordinal);
     }
 
     [Fact]

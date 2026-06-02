@@ -554,6 +554,14 @@ heartbeat
 
 `Health` не должен запускать обычную бизнес-обработку файлов.
 
+Текущий UI checkpoint:
+
+```text
+/admin -> Проверки
+```
+
+Первый экран Health показывает `/health/live` и `/health/ready`, включая checks `postgres`, `processingSchema` и `temporaryStorage`. Ready `503` отображается как проблемное состояние, а не как ошибка интерфейса. Экран не вызывает внешний `pdf2txt` и не отправляет PDF.
+
 Минимальный состав экрана `Health` для MVP:
 
 - Web: live, ready, version/build, database connectivity, schema compatibility;

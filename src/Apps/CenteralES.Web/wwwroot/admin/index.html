@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Centeral ES Admin</title>
-  <link rel="stylesheet" href="/admin/app.css?v=20260602-4">
+  <link rel="stylesheet" href="/admin/app.css?v=20260602-5">
 </head>
 <body>
   <div class="app-shell">
@@ -20,6 +20,7 @@
         <button class="nav-item is-active" type="button" data-tab="overview">Сводка</button>
         <button class="nav-item" type="button" data-tab="jobs">Задачи</button>
         <button class="nav-item" type="button" data-tab="processors">Обработчик</button>
+        <button class="nav-item" type="button" data-tab="health">Проверки</button>
         <button class="nav-item" type="button" data-tab="apiKeys">Ключи API</button>
         <button class="nav-item" type="button" data-tab="users">Администраторы</button>
         <button class="nav-item" type="button" data-tab="audit">Аудит</button>
@@ -240,6 +241,73 @@
           </div>
         </section>
 
+        <section id="health-tab" class="tab-panel" hidden>
+          <div class="section-band">
+            <div class="section-header">
+              <div>
+                <h2>Проверки</h2>
+                <p>Локальные health checks Web-приложения: live, PostgreSQL, схема и временное хранилище.</p>
+              </div>
+              <button id="refresh-health-button" class="secondary-button" type="button">Запустить проверки</button>
+            </div>
+            <div class="summary-grid health-summary">
+              <div class="summary-tile">
+                <span class="tile-label">Live</span>
+                <strong id="health-live-status">Нет данных</strong>
+                <span id="health-live-checked">Проверка не запускалась</span>
+              </div>
+              <div class="summary-tile">
+                <span class="tile-label">Ready</span>
+                <strong id="health-ready-status">Нет данных</strong>
+                <span id="health-ready-checked">Проверка не запускалась</span>
+              </div>
+              <div class="summary-tile">
+                <span class="tile-label">Проверок</span>
+                <strong id="health-check-count">0</strong>
+                <span>postgres/schema/storage</span>
+              </div>
+              <div class="summary-tile">
+                <span class="tile-label">Проблем</span>
+                <strong id="health-problem-count">0</strong>
+                <span>unhealthy checks</span>
+              </div>
+            </div>
+            <div class="details-grid">
+              <div class="detail-block">
+                <h3>Что проверяется</h3>
+                <div class="report-summary">
+                  <div>PostgreSQL: возможность открыть соединение и выполнить `select 1`.</div>
+                  <div>Processing schema: наличие обязательных таблиц очереди, результатов, admin и API keys.</div>
+                  <div>Temporary storage: запись, чтение, удаление health-файла и capacity guard.</div>
+                </div>
+              </div>
+              <div class="detail-block">
+                <h3>Граница MVP</h3>
+                <div class="report-summary">
+                  <div>Эта страница не вызывает внешний `pdf2txt` и не отправляет PDF.</div>
+                  <div>Processor health показывается на вкладке `Обработчик` по пассивным данным.</div>
+                  <div>Безопасный diagnostic probe будет отдельным действием с audit.</div>
+                </div>
+              </div>
+            </div>
+            <div class="detail-block">
+              <h3>Ready checks</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Проверка</th>
+                      <th>Статус</th>
+                      <th>Что значит</th>
+                    </tr>
+                  </thead>
+                  <tbody id="health-checks-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="apiKeys-tab" class="tab-panel" hidden>
           <div class="section-band">
             <div class="section-header">
@@ -355,6 +423,6 @@
     </form>
   </dialog>
 
-  <script src="/admin/app.js?v=20260602-4"></script>
+  <script src="/admin/app.js?v=20260602-5"></script>
 </body>
 </html>

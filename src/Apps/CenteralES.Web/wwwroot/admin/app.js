@@ -6,6 +6,7 @@ const state = {
   users: [],
   audit: [],
   processor: null,
+  health: null,
   selectedJobDetails: null,
   selectedSupportReport: null,
   activeTab: "overview"
@@ -15,6 +16,7 @@ const titles = {
   overview: ["Сводка", "Состояние очереди, обработчика и действий, которые требуют внимания."],
   jobs: ["Задачи", "Упавшие задачи и ручной retry."],
   processors: ["Обработчик", "Пассивное состояние PDF-обработчика, очередь, workers и diagnostics."],
+  health: ["Проверки", "Локальные readiness checks без внешнего pdf2txt-вызова."],
   apiKeys: ["Ключи API", "Доступ клиента ЭП к публичному API."],
   users: ["Администраторы", "Учетные записи, пароли и отключение доступа."],
   audit: ["Аудит", "Журнал опасных admin-действий."]
@@ -94,6 +96,11 @@ function bindSessionActions() {
     renderOverview();
     showAlert("Состояние обработчика обновлено.");
   });
+  document.getElementById("refresh-health-button").addEventListener("click", async () => {
+    await loadHealth();
+    renderHealthDetails();
+    showAlert("Проверки обновлены.");
+  });
   document.getElementById("logout-button").addEventListener("click", logout);
   document.getElementById("retry-detail-button").addEventListener("click", () => {
     if (state.selectedJobDetails) {
@@ -153,6 +160,7 @@ async function refreshData() {
     await Promise.all([
       loadJobs(),
       loadProcessor(),
+      loadHealth(),
       loadApiKeys(),
       loadUsers(),
       loadAudit()
@@ -181,6 +189,14 @@ async function loadProcessor() {
   state.processor = await apiGet("/api/admin/processors/pdf2txt-http-recognizer");
 }
 
+async function loadHealth() {
+  const [live, ready] = await Promise.all([
+    fetchHealthJson("/health/live"),
+    fetchHealthJson("/health/ready")
+  ]);
+  state.health = { live, ready };
+}
+
 async function loadApiKeys() {
   const response = await apiGet("/api/admin/api-keys?limit=100");
   state.apiKeys = response.keys || [];
@@ -204,6 +220,7 @@ function renderAll() {
   renderAudit();
   renderJobDetails();
   renderProcessorDetails();
+  renderHealthDetails();
 }
 
 function renderOverview() {
@@ -333,6 +350,64 @@ function renderProcessorDiagnostics(diagnostics) {
     `;
     body.appendChild(row);
   });
+}
+
+function renderHealthDetails() {
+  const live = state.health?.live;
+  const ready = state.health?.ready;
+  const checks = ready?.checks || [];
+  const problemCount = checks.filter(check => check.status !== "healthy").length;
+
+  setText("health-live-status", translateHealth(live?.status));
+  setText("health-live-checked", live?.checkedAt ? formatDate(live.checkedAt) : "Проверка не запускалась");
+  setText("health-ready-status", translateHealth(ready?.status));
+  setText("health-ready-checked", ready?.checkedAt ? formatDate(ready.checkedAt) : "Проверка не запускалась");
+  setText("health-check-count", checks.length);
+  setText("health-problem-count", problemCount);
+
+  const body = document.getElementById("health-checks-body");
+  body.innerHTML = "";
+  if (checks.length === 0) {
+    appendEmptyRow(body, 3, "Ready checks еще не загружены.");
+    return;
+  }
+
+  checks.forEach(check => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${escapeHtml(translateHealthCheckName(check.name))}</td>
+      <td>${statusPill(check.status)}</td>
+      <td>${escapeHtml(describeHealthCheck(check.name, check.status))}</td>
+    `;
+    body.appendChild(row);
+  });
+}
+
+function translateHealthCheckName(name) {
+  const map = {
+    postgres: "PostgreSQL",
+    processingSchema: "Схема БД",
+    temporaryStorage: "Временное хранилище"
+  };
+  return map[name] || name || "Неизвестная проверка";
+}
+
+function describeHealthCheck(name, status) {
+  if (status !== "healthy") {
+    const unhealthy = {
+      postgres: "Web не может использовать PostgreSQL.",
+      processingSchema: "Схема БД неполная или несовместима.",
+      temporaryStorage: "Временное хранилище недоступно или заполнено."
+    };
+    return unhealthy[name] || "Проверка завершилась проблемой.";
+  }
+
+  const healthy = {
+    postgres: "Соединение с PostgreSQL работает.",
+    processingSchema: "Обязательные таблицы найдены.",
+    temporaryStorage: "Запись, чтение и capacity guard работают."
+  };
+  return healthy[name] || "Проверка прошла успешно.";
 }
 
 async function loadJobDetails(jobId) {
@@ -718,6 +793,20 @@ async function fetchJson(url, options = {}, requireAuth = true) {
   return tryReadJson(response);
 }
 
+async function fetchHealthJson(url) {
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    headers: { "Accept": "application/json" }
+  });
+  const payload = await tryReadJson(response);
+  if (!response.ok && response.status !== 503) {
+    const error = new Error(payload?.error?.message || `HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return payload;
+}
+
 async function tryReadJson(response) {
   const text = await response.text();
   return text ? JSON.parse(text) : null;
@@ -803,6 +892,9 @@ function translateStatus(status) {
   const map = {
     active: "Активен",
     disabled: "Отключен",
+    healthy: "Работает",
+    unhealthy: "Проблема",
+    unknown: "Нет данных",
     failed: "Ошибка",
     blocked: "Заблокирована",
     stale: "Нет heartbeat",
