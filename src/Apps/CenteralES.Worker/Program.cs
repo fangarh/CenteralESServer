@@ -18,6 +18,8 @@ var processingDatabaseConnectionString = PostgresDatabaseConnectionStringResolve
 var temporaryStorageRoot = TemporaryStorageRootResolver.Resolve(builder.Configuration["Storage:TemporaryRoot"]);
 var workerJobProcessorOptions = ResolveWorkerJobProcessorOptions(builder.Configuration);
 var workerRecoveryOptions = ResolveWorkerRecoveryOptions(builder.Configuration);
+using var startupLoggerFactory = LoggerFactory.Create(logging => logging.AddConsole());
+var startupLogger = startupLoggerFactory.CreateLogger("CenteralES.Worker.Startup");
 var autoBootstrapDatabase = ShouldAutoBootstrapDatabase(builder.Configuration, builder.Environment);
 if (autoBootstrapDatabase)
 {
@@ -33,7 +35,7 @@ builder.Services.AddSingleton<IProcessingJobClaimQueue>(services => services.Get
 builder.Services.AddSingleton<IProcessingJobRecoveryQueue>(services => services.GetRequiredService<PostgresProcessingJobQueue>());
 builder.Services.AddSingleton<IWorkerHeartbeatStore, PostgresWorkerHeartbeatStore>();
 builder.Services.AddSingleton<IPdfStampRecognitionResultStore, PostgresPdfStampRecognitionResultStore>();
-RegisterPdfStampRecognizer(builder.Services, builder.Configuration);
+RegisterPdfStampRecognizer(builder.Services, builder.Configuration, startupLogger);
 builder.Services.AddSingleton<ITemporaryFileStore>(_ => new LocalTemporaryFileStore(temporaryStorageRoot));
 builder.Services.AddSingleton(workerJobProcessorOptions);
 builder.Services.AddSingleton(workerRecoveryOptions);
@@ -48,20 +50,44 @@ if (autoBootstrapDatabase)
 }
 host.Run();
 
-static void RegisterPdfStampRecognizer(IServiceCollection services, IConfiguration configuration)
+static void RegisterPdfStampRecognizer(
+    IServiceCollection services,
+    IConfiguration configuration,
+    ILogger logger)
 {
-    var recognizer = configuration["PdfStampRecognition:Recognizer"];
-    if (!string.Equals(recognizer, "Http", StringComparison.OrdinalIgnoreCase))
+    var recognizer = configuration["PdfStampRecognition:Recognizer"]?.Trim();
+    logger.LogInformation(
+        "Resolved PdfStampRecognition:Recognizer as {Recognizer}",
+        string.IsNullOrWhiteSpace(recognizer) ? "<empty>" : recognizer);
+
+    if (string.Equals(recognizer, "Fake", StringComparison.OrdinalIgnoreCase))
     {
+        logger.LogInformation(
+            "Registering {RecognizerImplementation} for {RecognizerContract}.",
+            nameof(FakePdfStampRecognizer),
+            nameof(IPdfStampRecognizer));
         services.AddSingleton<IPdfStampRecognizer, FakePdfStampRecognizer>();
         return;
     }
 
-    var options = ResolveHttpPdfStampRecognizerOptions(configuration);
-    services.AddSingleton(options);
-    services.AddSingleton<HttpPdfStampRecognizerEndpointPool>();
-    services.AddSingleton(_ => new HttpClient());
-    services.AddSingleton<IPdfStampRecognizer, HttpPdfStampRecognizer>();
+    if (string.Equals(recognizer, "Http", StringComparison.OrdinalIgnoreCase))
+    {
+        logger.LogInformation(
+            "Registering {RecognizerImplementation} for {RecognizerContract}.",
+            nameof(HttpPdfStampRecognizer),
+            nameof(IPdfStampRecognizer));
+        var options = ResolveHttpPdfStampRecognizerOptions(configuration);
+        services.AddSingleton(options);
+        services.AddSingleton<HttpPdfStampRecognizerEndpointPool>();
+        services.AddHttpClient(HttpPdfStampRecognizer.HttpClientName);
+        services.AddSingleton<IPdfStampRecognizer, HttpPdfStampRecognizer>();
+        return;
+    }
+
+    logger.LogError(
+        "Unsupported PdfStampRecognition:Recognizer value {Recognizer}. Supported values are Http and Fake.",
+        string.IsNullOrWhiteSpace(recognizer) ? "<empty>" : recognizer);
+    throw new InvalidOperationException("Configuration value PdfStampRecognition:Recognizer must be either Http or Fake.");
 }
 
 static HttpPdfStampRecognizerOptions ResolveHttpPdfStampRecognizerOptions(IConfiguration configuration)

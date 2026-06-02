@@ -159,7 +159,25 @@ unknown
 
 ### Docker Compose baseline
 
-Для Web Docker health-check ориентируется на `/health/ready`.
+Docker Compose baseline реализован в корне репозитория:
+
+```text
+compose.yaml
+.env.example
+docker/Dockerfile.web
+docker/Dockerfile.worker
+docker/Dockerfile.migrator
+```
+
+Минимальный порядок запуска:
+
+```text
+postgres -> migrator -> web + worker
+```
+
+`postgres` использует `pg_isready` healthcheck. `migrator` стартует только после healthy PostgreSQL и завершается как one-shot service. `web` и `worker` стартуют только после `migrator` с `service_completed_successfully`.
+
+Для Web runtime readiness ориентируется на `/health/ready`.
 
 Для Worker Docker health-check ориентируется на локальный worker healthcheck command или локальный management endpoint.
 
@@ -172,6 +190,33 @@ CenteralES.DatabaseMigrator
 ```
 
 Этот step применяет embedded SQL migrations из `CenteralES.Infrastructure`, записывает `schema_migrations` и завершается до старта runtime-процессов. Web и Worker в Production должны запускаться с `Database:AutoBootstrap=false`, чтобы runtime не требовал `CREATE DATABASE`/DDL прав.
+
+Локальный запуск MVP:
+
+```powershell
+copy .env.example .env
+docker compose build
+docker compose up
+```
+
+После запуска Web доступен на:
+
+```text
+http://localhost:8080
+```
+
+Готовность Web:
+
+```text
+GET http://localhost:8080/health/ready
+```
+
+По умолчанию compose использует `CENTERALES_PDF_RECOGNIZER=Fake`, чтобы delivery MVP поднимался без внешнего `pdf2txt`. Для реального processor-а нужно задать:
+
+```text
+CENTERALES_PDF_RECOGNIZER=Http
+CENTERALES_PDF2TXT_ENDPOINT=https://.../recognize_json/
+```
 
 ## Общая инфраструктура
 

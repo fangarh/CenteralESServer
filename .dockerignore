@@ -1,0 +1,40 @@
+# Git and local tooling
+.git/
+.gitignore
+.codex-local/
+.superpowers/
+
+# Local secrets and input samples
+.env
+.env.*
+!.env.example
+db.env
+logon.env
+test.pdf
+
+# .NET outputs
+bin/
+obj/
+TestResults/
+
+# IDE/editor state
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Documentation and planning artifacts are not needed for container builds
+ESServer/
+.planning/
+docs/
+tests/
+
+# Local temp/noise
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
+Thumbs.db
+Desktop.ini

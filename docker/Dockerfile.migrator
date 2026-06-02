@@ -1,0 +1,17 @@
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+COPY . .
+RUN dotnet restore src/Apps/CenteralES.DatabaseMigrator/CenteralES.DatabaseMigrator.csproj
+RUN dotnet publish src/Apps/CenteralES.DatabaseMigrator/CenteralES.DatabaseMigrator.csproj \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish \
+    /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/runtime:9.0 AS final
+WORKDIR /app
+
+COPY --from=build /app/publish .
+USER app
+ENTRYPOINT ["dotnet", "CenteralES.DatabaseMigrator.dll"]

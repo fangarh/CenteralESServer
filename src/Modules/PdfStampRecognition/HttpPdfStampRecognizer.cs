@@ -9,16 +9,18 @@ namespace CenteralES.PdfStampRecognition;
 
 public sealed class HttpPdfStampRecognizer : IPdfStampRecognizer
 {
-    private readonly HttpClient _httpClient;
+    public const string HttpClientName = "PdfStampRecognizer";
+
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly HttpPdfStampRecognizerEndpointPool _endpointPool;
     private readonly HttpPdfStampRecognizerOptions _options;
 
     public HttpPdfStampRecognizer(
-        HttpClient httpClient,
+        IHttpClientFactory httpClientFactory,
         HttpPdfStampRecognizerEndpointPool endpointPool,
         HttpPdfStampRecognizerOptions options)
     {
-        _httpClient = httpClient;
+        _httpClientFactory = httpClientFactory;
         _endpointPool = endpointPool;
         _options = options;
         _options.Validate();
@@ -55,7 +57,8 @@ public sealed class HttpPdfStampRecognizer : IPdfStampRecognizer
         try
         {
             using var request = CreateRequest(lease.Endpoint, job, pdfContent, correlationId);
-            using var response = await _httpClient.SendAsync(
+            var httpClient = _httpClientFactory.CreateClient(HttpClientName);
+            using var response = await httpClient.SendAsync(
                 request,
                 HttpCompletionOption.ResponseHeadersRead,
                 timeout.Token);
@@ -150,9 +153,13 @@ public sealed class HttpPdfStampRecognizer : IPdfStampRecognizer
         var streamContent = new StreamContent(pdfContent);
         streamContent.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
 
+        var hashSeparatorIndex = job.ContentHash.IndexOf(':', StringComparison.Ordinal);
+        var hashFileName = hashSeparatorIndex >= 0
+            ? job.ContentHash[(hashSeparatorIndex + 1)..]
+            : job.ContentHash;
         var multipart = new MultipartFormDataContent
         {
-            { streamContent, "file", $"{job.ContentHash.Replace("sha256:", string.Empty, StringComparison.Ordinal)}.pdf" }
+            { streamContent, "file", $"{hashFileName}.pdf" }
         };
 
         var request = new HttpRequestMessage(HttpMethod.Post, endpoint)

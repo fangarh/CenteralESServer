@@ -64,6 +64,7 @@ internal static class HealthEndpoints
                     to_regclass('public.processing_subjects') is not null
                     and to_regclass('public.processing_jobs') is not null
                     and to_regclass('public.processing_attempt_diagnostics') is not null
+                    and to_regclass('public.processing_content_hashes') is not null
                     and to_regclass('public.processing_result_index') is not null
                     and to_regclass('public.pdf_stamp_recognition_results') is not null
                     and to_regclass('public.processing_worker_heartbeats') is not null

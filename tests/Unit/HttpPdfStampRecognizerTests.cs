@@ -15,10 +15,15 @@ public sealed class HttpPdfStampRecognizerTests
         var handler = new RecordingHttpMessageHandler(async (request, cancellationToken) =>
         {
             sentRequest = request;
+            var multipart = Assert.IsType<MultipartFormDataContent>(request.Content);
+            var filePart = Assert.Single(multipart);
+            Assert.Equal("012345.pdf", filePart.Headers.ContentDisposition?.FileName?.Trim('"'));
+
             var requestBody = await request.Content!.ReadAsStringAsync(cancellationToken);
 
             Assert.Contains("Content-Type: application/pdf", requestBody, StringComparison.Ordinal);
             Assert.Contains("%PDF unit test", requestBody, StringComparison.Ordinal);
+            Assert.DoesNotContain("gost-r-34.11-2012-256:", requestBody, StringComparison.Ordinal);
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -26,7 +31,7 @@ public sealed class HttpPdfStampRecognizerTests
             };
         });
         var recognizer = CreateRecognizer(handler);
-        var job = CreateJob();
+        var job = CreateJob("gost-r-34.11-2012-256:012345");
 
         await using var pdf = new MemoryStream(Encoding.UTF8.GetBytes("%PDF unit test"));
         var result = await recognizer.RecognizeAsync(job, pdf, CancellationToken.None);
@@ -93,7 +98,7 @@ public sealed class HttpPdfStampRecognizerTests
         var pool = new HttpPdfStampRecognizerEndpointPool(options);
         using var lease = await pool.TryAcquireAsync(CancellationToken.None);
         var recognizer = new HttpPdfStampRecognizer(
-            new HttpClient(new RecordingHttpMessageHandler((_, _) => throw new InvalidOperationException("should not call http"))),
+            new RecordingHttpClientFactory(new RecordingHttpMessageHandler((_, _) => throw new InvalidOperationException("should not call http"))),
             pool,
             options);
 
@@ -116,18 +121,18 @@ public sealed class HttpPdfStampRecognizerTests
         };
 
         return new HttpPdfStampRecognizer(
-            new HttpClient(handler),
+            new RecordingHttpClientFactory(handler),
             new HttpPdfStampRecognizerEndpointPool(options),
             options);
     }
 
-    private static ClaimedProcessingJob CreateJob()
+    private static ClaimedProcessingJob CreateJob(string? contentHash = null)
     {
         return new ClaimedProcessingJob(
             Guid.NewGuid(),
             Guid.NewGuid(),
             PdfStampRecognitionConstants.Capability,
-            $"sha256:{Guid.NewGuid():N}",
+            contentHash ?? $"sha256:{Guid.NewGuid():N}",
             "incoming/test.pdf",
             1);
     }
@@ -144,6 +149,22 @@ public sealed class HttpPdfStampRecognizerTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             return _send(request, cancellationToken);
+        }
+    }
+
+    private sealed class RecordingHttpClientFactory : IHttpClientFactory
+    {
+        private readonly HttpMessageHandler _handler;
+
+        public RecordingHttpClientFactory(HttpMessageHandler handler)
+        {
+            _handler = handler;
+        }
+
+        public HttpClient CreateClient(string name)
+        {
+            Assert.Equal(HttpPdfStampRecognizer.HttpClientName, name);
+            return new HttpClient(_handler, disposeHandler: false);
         }
     }
 }

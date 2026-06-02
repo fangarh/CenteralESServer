@@ -69,7 +69,7 @@
 ### Delivery
 
 - [ ] **DEPLOY-01**: MVP запускается через Docker Compose.
-- [ ] **DEPLOY-02**: Compose содержит Web, Worker, PostgreSQL и shared local storage volume.
+- [x] **DEPLOY-02**: Compose содержит Web, Worker, PostgreSQL и shared local storage volume.
 
 ## v2 Requirements
 
@@ -135,7 +135,7 @@
 | HEALTH-01 | Phase 2 | Done: Web endpoints plus Admin UI Health screen |
 | HEALTH-02 | Phase 2 | Done |
 | DEPLOY-01 | Phase 3 | Pending |
-| DEPLOY-02 | Phase 3 | Pending |
+| DEPLOY-02 | Phase 3 | Done: `compose.yaml` includes PostgreSQL, one-shot migrator, Web, Worker, shared temporary storage volume, explicit DB password requirement, non-root final images, and CodeRabbit `findings: 0`; Docker runtime validation remains under DEPLOY-01 because Docker CLI is unavailable locally |
 
 **Coverage:**
 - v1 requirements: 42 total
@@ -144,4 +144,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-02 after code review remediation*
+*Last updated: 2026-06-02 after Docker Compose baseline*
