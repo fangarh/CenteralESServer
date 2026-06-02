@@ -116,7 +116,7 @@
 | ADMIN-02 | Phase 2 | Done: Backend endpoint plus UI action for single-job retry |
 | ADMIN-03 | Phase 2 | Done: manual retry/API key/admin user audit plus filtered Admin Audit UI with safe details |
 | ADMIN-04 | Phase 2 | Done: Backend support report endpoint plus UI download action |
-| ADMIN-05 | Phase 2 | Done: shared `IAdminBootstrapper` plus separate WinForms test bootstrap app |
+| ADMIN-05 | Phase 2 | Done: shared `IAdminBootstrapper` plus separate WinForms test bootstrap app, with backend smoke coverage for bootstrap -> login -> CSRF session validation |
 | ADMIN-06 | Phase 4 | Done: safe PDF stamp recognition summary in Admin Result Details |
 | HEALTH-01 | Phase 2 | Done: Web endpoints plus Admin UI Health screen |
 | HEALTH-02 | Phase 2 | Done |
@@ -130,4 +130,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-02 after Admin Result Details summary*
+*Last updated: 2026-06-02 after First Admin bootstrap smoke*

@@ -1,3 +1,4 @@
+using CenteralES.AccessControl;
 using CenteralES.Admin;
 using CenteralES.Infrastructure.AccessControl;
 using CenteralES.Infrastructure.Postgres;
@@ -87,6 +88,75 @@ public sealed class PostgresProcessingJobQueueTests
         Assert.Equal(AdminAuditActions.BootstrapAdminUser, stored.AuditAction);
         Assert.DoesNotContain(password, stored.AuditNewValueJson, StringComparison.Ordinal);
         Assert.DoesNotContain(password, stored.AuditTechnicalMetadataJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Admin_bootstrap_smoke_can_login_and_validate_session()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetAdminBootstrapTablesAsync(dataSource, CancellationToken.None);
+
+        var adminBootstrapper = new PostgresAdminBootstrapper(dataSource);
+        var authenticator = new PostgresAdminAuthenticator(dataSource);
+        var now = DateTimeOffset.UtcNow;
+        const string login = "bootstrap-smoke-admin";
+        const string password = "bootstrap-smoke-password";
+
+        var bootstrap = await adminBootstrapper.BootstrapFirstAdminAsync(
+            new AdminBootstrapUserCommand(
+                login,
+                password,
+                now,
+                "bootstrap smoke",
+                "integration_smoke"),
+            CancellationToken.None);
+
+        var loginOutcome = await authenticator.LoginAsync(
+            new AdminLoginRequest(
+                login,
+                password,
+                now.AddSeconds(1),
+                "127.0.0.1",
+                "integration-smoke"),
+            CancellationToken.None);
+
+        var validation = await authenticator.ValidateSessionAsync(
+            new AdminSessionValidationRequest(
+                loginOutcome.Credential?.SessionToken,
+                loginOutcome.Credential?.CsrfToken,
+                RequireCsrf: true,
+                now.AddSeconds(2)),
+            CancellationToken.None);
+
+        var repeatedBootstrap = await adminBootstrapper.BootstrapFirstAdminAsync(
+            new AdminBootstrapUserCommand(
+                "second-bootstrap-admin",
+                "second-bootstrap-password",
+                now.AddSeconds(3),
+                null,
+                "integration_smoke"),
+            CancellationToken.None);
+
+        var success = Assert.IsType<AdminBootstrapUserSuccess>(bootstrap);
+        var initialized = Assert.IsType<AdminBootstrapAlreadyInitialized>(repeatedBootstrap);
+
+        Assert.Equal(AdminLoginStatus.Success, loginOutcome.Status);
+        Assert.NotNull(loginOutcome.Credential);
+        Assert.Equal(AdminSessionValidationStatus.Success, validation.Status);
+        Assert.NotNull(validation.Principal);
+        Assert.Equal(success.User.UserId, validation.Principal.UserId);
+        Assert.Equal(login, validation.Principal.Login);
+        Assert.Equal(1, initialized.ActiveAdminCount);
     }
 
     [Fact]

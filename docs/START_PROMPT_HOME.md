@@ -66,6 +66,8 @@ db.env, logon.env, .codex-local/ и test.pdf должны оставаться i
 - SQL migration runner без EF реализован.
 - Отдельное тестовое WinForms-приложение для создания первого admin реализовано:
   src/Apps/CenteralES.Admin.Bootstrap.WinForms
+- Backend smoke для WinForms bootstrap path реализован:
+  .codex-local/run-admin-bootstrap-smoke.ps1
 - ADMIN-03 закрыт для текущего MVP-набора dangerous actions.
 - Docker Compose еще не реализован.
 
@@ -82,13 +84,22 @@ db.env, logon.env, .codex-local/ и test.pdf должны оставаться i
 - HTTP/Playwright smoke для /admin и /api/admin/audit прошел.
 - Ожидаемая console error до логина: 401 /api/admin/auth/me.
 
+Проверка после WinForms bootstrap smoke:
+- powershell -ExecutionPolicy Bypass -File .\.codex-local\run-admin-bootstrap-smoke.ps1
+  Результат: 1 integration test passed
+- dotnet build CenteralESServer.sln --no-restore -maxcpucount:1 -v:minimal
+  Результат: passed
+- dotnet test CenteralESServer.sln --no-build --no-restore -maxcpucount:1 -v:minimal
+  Результат: 50 unit + 49 integration passed
+- C:\Users\Admin\.dotnet\dotnet.exe отсутствует в текущем окружении; проверки выполнялись системным dotnet.
+
 Следующий логичный шаг без Docker:
-Raw JSON controlled debug endpoint или локальный WinForms smoke для bootstrap app.
+Raw JSON controlled debug endpoint.
 
 Зачем:
 - PDF summary уже закрыт безопасными счетчиками и excerpts;
 - если нужен raw JSON, это должен быть отдельный controlled/debug endpoint;
-- WinForms app пока проверен сборкой и тестами, но не интерактивным запуском.
+- WinForms bootstrap path покрыт backend smoke без запуска GUI.
 
 После этого следующий крупный блок:
 Docker Compose Delivery MVP:

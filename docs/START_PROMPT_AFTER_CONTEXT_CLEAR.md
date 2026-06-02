@@ -18,58 +18,60 @@ D:\Projects\DT1520\CenteralESServer
 - Health/admin diagnostic не должны запускать обычную бизнес-обработку файла во внешнем processor-е.
 - Перед изменениями читай существующие паттерны в src, tests, ESServer, .planning.
 - Не откатывай незакоммиченные изменения без явного запроса пользователя.
-
-Текущая важная точка:
-В предыдущей сессии был проведен полный code audit и внесен первый пакет исправлений. Рабочая копия ожидаемо dirty, изменения уже прошли build/test через системный dotnet, но еще не закоммичены.
+- Docker сейчас не делать, если пользователь отдельно не попросит.
 
 Сначала выполни:
 1. git status --short
-2. git diff --stat
-3. Прочитай:
-   - AGENTS.md
-   - ESServer/00 Обзор/Handoff после code audit refactor 2026-06-02.md
-   - docs/START_PROMPT_AFTER_CONTEXT_CLEAR.md
+2. git log --oneline -5
+3. git check-ignore -v db.env
+4. git check-ignore -v logon.env
+5. git check-ignore -v test.pdf
+6. git check-ignore -v .codex-local
 
-Ожидаемые измененные файлы:
-- src/Apps/CenteralES.Web/Program.cs
-- src/Apps/CenteralES.Web/PublicPdfEndpoints.cs
-- src/Apps/CenteralES.Worker/Program.cs
-- src/Apps/CenteralES.Worker/WorkerJobProcessor.cs
-- src/Shared/CenteralES.Infrastructure/Postgres/PostgresDatabaseBootstrapper.cs
-- src/Shared/CenteralES.Infrastructure/Processing/PostgresProcessingSql.cs
-- tests/Integration/WebApiContractTests.cs
-- tests/Unit/PostgresProcessingSqlTests.cs
-- tests/Unit/WorkerJobProcessorTests.cs
-- src/Modules/Processing/ProcessingInputRetentionPolicy.cs
-- src/Modules/Storage/TemporaryStorageRootResolver.cs
-- src/Shared/CenteralES.Infrastructure/Postgres/PostgresDatabaseConnectionStringResolver.cs
-- tests/Unit/ProcessingInputRetentionPolicyTests.cs
+Прочитай:
+- AGENTS.md
+- ESServer/00 Обзор/Текущая точка реализации 2026-06-02.md
+- ESServer/04 Админка/Админка MVP.md
+- .planning/STATE.md
+- .planning/ROADMAP.md
+- .planning/REQUIREMENTS.md
+- docs/START_PROMPT_HOME.md
 
-Что уже исправлено:
-- Worker больше не удаляет temporary PDF после final failed/blocked job, чтобы manual retry мог переиспользовать input.
-- Добавлена ProcessingInputRetentionPolicy.
-- Public upload pipeline теперь проверяет existing result и active job by hash до записи temporary file.
-- Duplicate active upload возвращает existing job до temporary storage write.
-- Upload endpoint получил request-size metadata и безопасный 413 payload_too_large при ошибке разбора multipart.
-- Общий resolver connection string вынесен в PostgresDatabaseConnectionStringResolver.
-- Общий resolver temporary storage root вынесен в TemporaryStorageRootResolver.
-- Добавлена таблица schema_migrations и marker 0001_processing_baseline.
-- Добавлены/обновлены unit и integration tests.
+Текущий статус:
+- Public API baseline реализован.
+- PostgreSQL-backed queue реализована.
+- Worker processing/retry/heartbeat baseline реализован.
+- Admin login/session/CSRF реализован.
+- Admin single-job retry реализован.
+- Admin support report реализован.
+- Admin API keys management реализован.
+- Admin users management реализован.
+- Admin Storage read-only реализован.
+- Admin Results read-only реализован.
+- Admin Result Details показывает безопасный PDF summary без raw JSON payload.
+- Admin Settings read-only реализован.
+- Admin Audit UI с фильтрами и safe details реализован.
+- SQL migration runner без EF реализован.
+- Отдельное тестовое WinForms-приложение для создания первого admin реализовано:
+  src/Apps/CenteralES.Admin.Bootstrap.WinForms
+- Backend smoke для WinForms bootstrap path реализован:
+  .codex-local/run-admin-bootstrap-smoke.ps1
+- Docker Compose еще не реализован и сейчас исключен из работы.
 
-Последние проверки:
-- C:\Users\Admin\.dotnet\dotnet.exe build ... не запустился, потому что этот SDK path отсутствовал в текущем окружении.
-- dotnet build CenteralESServer.sln --no-restore -maxcpucount:1 -v:minimal прошел успешно.
-- dotnet test CenteralESServer.sln --no-build --no-restore -maxcpucount:1 -v:minimal прошел успешно:
-  - Unit: 45/45 passed
-  - Integration: 45/45 passed
+Проверки последнего WinForms bootstrap smoke checkpoint:
+- powershell -ExecutionPolicy Bypass -File .\.codex-local\run-admin-bootstrap-smoke.ps1
+  Результат: 1 integration test passed
+- dotnet build CenteralESServer.sln --no-restore -maxcpucount:1 -v:minimal
+  Результат: passed
+- dotnet test CenteralESServer.sln --no-build --no-restore -maxcpucount:1 -v:minimal
+  Результат: 50 unit + 49 integration passed
+- C:\Users\Admin\.dotnet\dotnet.exe отсутствует в текущем окружении; проверки выполнялись системным dotnet.
 
-Следующая задача:
-1. Быстро перепроверь текущий diff.
-2. Если все нормально, сделай commit с сообщением вроде:
-   Fix processing input retention and upload dedup flow
-3. После commit можно планировать следующий checkpoint:
-   - полноценный SQL migration runner без EF;
-   - или разбиение wwwroot/admin/app.js;
-   - или Docker Compose Delivery MVP.
+Следующий логичный шаг без Docker:
+Raw JSON controlled debug endpoint.
+
+Зачем:
+- PDF summary уже закрыт безопасными счетчиками и excerpts;
+- если нужен raw JSON, это должен быть отдельный controlled/debug endpoint с явной границей доступа;
+- raw payload и входные PDF нельзя показывать в обычном Admin UI.
 ```
-
