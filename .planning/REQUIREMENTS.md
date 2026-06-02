@@ -51,7 +51,7 @@
 
 - [x] **ADMIN-01**: Admin UI показывает минимальную видимость очереди, failed/blocked jobs и processor health.
 - [x] **ADMIN-02**: Admin может выполнить manual retry одной failed/blocked задачи.
-- [ ] **ADMIN-03**: Audit фиксирует опасные admin actions.
+- [x] **ADMIN-03**: Audit фиксирует опасные admin actions.
 - [x] **ADMIN-04**: Admin API отдаёт support report для Job Details без входного PDF, raw secrets и больших payload.
 - [x] **HEALTH-01**: Web предоставляет `/health/live` и `/health/ready`.
 - [x] **HEALTH-02**: Worker пишет heartbeat каждые `30 seconds`, stale threshold `3 minutes`.
@@ -110,7 +110,7 @@
 | STORE-04 | Phase 2 | Done: hard-limit upload guard plus Admin Storage capacity visibility |
 | ADMIN-01 | Phase 1 | Done: `/admin` UI shell, Jobs/Job Details, Results, Processor Details, Health, Delivery, Storage, Settings plus Admin API |
 | ADMIN-02 | Phase 2 | Done: Backend endpoint plus UI action for single-job retry |
-| ADMIN-03 | Phase 2 | Partial: manual retry/API key/admin user audit and audit read API done |
+| ADMIN-03 | Phase 2 | Done: manual retry/API key/admin user audit plus filtered Admin Audit UI with safe details |
 | ADMIN-04 | Phase 2 | Done: Backend support report endpoint plus UI download action |
 | HEALTH-01 | Phase 2 | Done: Web endpoints plus Admin UI Health screen |
 | HEALTH-02 | Phase 2 | Done |
@@ -124,4 +124,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-02 after Admin Settings checkpoint*
+*Last updated: 2026-06-02 after Admin Audit UI checkpoint*

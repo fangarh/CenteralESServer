@@ -30,6 +30,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -222,6 +223,7 @@ label {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   border: 1px solid #8a96a3;
@@ -232,6 +234,7 @@ textarea {
 }
 
 input:focus,
+select:focus,
 textarea:focus,
 button:focus-visible {
   outline: 3px solid #7dd3fc;
@@ -307,6 +310,20 @@ button:focus-visible {
   background: var(--surface-strong);
 }
 
+.audit-filter-form {
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+}
+
+.filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.audit-summary-header {
+  margin-top: 6px;
+}
+
 .table-wrap {
   overflow-x: auto;
 }
@@ -377,6 +394,14 @@ th {
 .audit-item strong {
   display: block;
   margin-bottom: 4px;
+}
+
+.audit-item details {
+  margin-top: 10px;
+}
+
+.audit-safe-details {
+  margin-top: 8px;
 }
 
 .secret-box {
@@ -482,6 +507,10 @@ th {
   .inline-form {
     grid-template-columns: 1fr 1fr;
   }
+
+  .audit-filter-form {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 700px) {
@@ -502,6 +531,7 @@ th {
   .processor-summary,
   .health-summary,
   .inline-form,
+  .audit-filter-form,
   .details-grid {
     grid-template-columns: 1fr;
   }

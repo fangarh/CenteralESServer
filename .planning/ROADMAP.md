@@ -41,7 +41,7 @@ Scope:
 - API key model and auth middleware; baseline implemented, admin creation/rotation UI remains later in Phase 2/4;
 - admin login/session/CSRF baseline; backend baseline implemented, init command/UI/audit remain later in Phase 2/4;
 - manual retry одной задачи; backend endpoint implemented, UI remains Phase 4;
-- audit для admin actions; manual retry audit implemented, remaining dangerous actions later in Phase 2/4;
+- audit для admin actions; current MVP dangerous actions and filtered Audit UI implemented;
 - health live/ready и Worker heartbeat; baseline already implemented in Phase 1, remaining work is hardening/admin visibility;
 - temporary storage hard/soft limit behavior; backend hard-limit block implemented, Admin UI warning remains Phase 4;
 - blocked/final failure handling;
@@ -72,7 +72,7 @@ Scope:
 - API Keys UI;
 - Storage screen read-only baseline done; cleanup/retention actions remain later;
 - Health screen;
-- Audit screen;
+- Audit screen baseline done with filters and safe details;
 - Admin Users;
 - Settings read-only baseline done; editing remains later.
 
@@ -95,4 +95,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-02 after Admin Settings checkpoint*
+*Last updated: 2026-06-02 after Admin Audit UI checkpoint*

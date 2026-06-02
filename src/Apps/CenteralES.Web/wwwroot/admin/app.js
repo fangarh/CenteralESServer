@@ -6,6 +6,15 @@ const state = {
   apiKeys: [],
   users: [],
   audit: [],
+  auditFilters: {
+    action: "",
+    targetType: "",
+    targetId: "",
+    actor: "",
+    occurredFrom: "",
+    occurredTo: "",
+    limit: "50"
+  },
   processor: null,
   health: null,
   storage: null,
@@ -94,6 +103,24 @@ function bindForms() {
     await loadAudit();
     renderAll();
   });
+
+  document.getElementById("audit-filter-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    state.auditFilters = {
+      action: String(form.get("action") || "").trim(),
+      targetType: String(form.get("targetType") || "").trim(),
+      targetId: String(form.get("targetId") || "").trim(),
+      actor: String(form.get("actor") || "").trim(),
+      occurredFrom: String(form.get("occurredFrom") || "").trim(),
+      occurredTo: String(form.get("occurredTo") || "").trim(),
+      limit: String(form.get("limit") || "50").trim()
+    };
+    await loadAudit();
+    renderAudit();
+    renderAuditFilters();
+    showAlert("Фильтр аудита применен.");
+  });
 }
 
 function bindSessionActions() {
@@ -126,6 +153,29 @@ function bindSessionActions() {
     await loadSettings();
     renderSettingsDetails();
     showAlert("Settings обновлены.");
+  });
+  document.getElementById("refresh-audit-button").addEventListener("click", async () => {
+    await loadAudit();
+    renderAudit();
+    renderAuditFilters();
+    showAlert("Аудит обновлен.");
+  });
+  document.getElementById("audit-filter-reset").addEventListener("click", async () => {
+    state.auditFilters = {
+      action: "",
+      targetType: "",
+      targetId: "",
+      actor: "",
+      occurredFrom: "",
+      occurredTo: "",
+      limit: "50"
+    };
+    document.getElementById("audit-filter-form").reset();
+    document.querySelector("#audit-filter-form [name='limit']").value = "50";
+    await loadAudit();
+    renderAudit();
+    renderAuditFilters();
+    showAlert("Фильтр аудита сброшен.");
   });
   document.getElementById("logout-button").addEventListener("click", logout);
   document.getElementById("retry-detail-button").addEventListener("click", () => {
@@ -243,8 +293,43 @@ async function loadUsers() {
 }
 
 async function loadAudit() {
-  const response = await apiGet("/api/admin/audit?limit=50");
+  const response = await apiGet(`/api/admin/audit?${buildAuditQuery()}`);
   state.audit = response.events || [];
+}
+
+function buildAuditQuery() {
+  const filters = state.auditFilters || {};
+  const query = new URLSearchParams();
+  appendAuditFilter(query, "action", filters.action);
+  appendAuditFilter(query, "targetType", filters.targetType);
+  appendAuditFilter(query, "targetId", filters.targetId);
+  appendAuditFilter(query, "actor", filters.actor);
+  appendAuditFilter(query, "occurredFrom", toIsoTimestamp(filters.occurredFrom));
+  appendAuditFilter(query, "occurredTo", toIsoTimestamp(filters.occurredTo));
+  appendAuditFilter(query, "limit", clampAuditLimit(filters.limit));
+  return query.toString();
+}
+
+function appendAuditFilter(query, name, value) {
+  if (value !== null && value !== undefined && String(value).trim() !== "") {
+    query.set(name, String(value).trim());
+  }
+}
+
+function toIsoTimestamp(value) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
+function clampAuditLimit(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) {
+    return "50";
+  }
+  return String(Math.min(200, Math.max(1, parsed)));
 }
 
 async function loadStorage() {
@@ -262,6 +347,7 @@ function renderAll() {
   renderApiKeys();
   renderUsers();
   renderAudit();
+  renderAuditFilters();
   renderJobDetails();
   renderResultDetails();
   renderProcessorDetails();
@@ -935,7 +1021,7 @@ function renderAudit() {
   const list = document.getElementById("audit-list");
   list.innerHTML = "";
   if (state.audit.length === 0) {
-    list.appendChild(workItem("Записей аудита нет", "Опасные действия пока не выполнялись."));
+    list.appendChild(workItem("Записей аудита нет", "Для выбранного фильтра события не найдены."));
     return;
   }
 
@@ -944,12 +1030,70 @@ function renderAudit() {
     item.className = "audit-item";
     item.innerHTML = `
       <strong>${escapeHtml(translateAction(event.action))}</strong>
-      <div>${escapeHtml(event.actorLogin || "system")} -> ${escapeHtml(event.targetType)} / ${escapeHtml(event.targetId)}</div>
+      <div>${escapeHtml(event.actorLogin || "system")} -> ${escapeHtml(translateAuditTargetType(event.targetType))} / <span class="mono">${escapeHtml(shortAuditTarget(event.targetId))}</span></div>
       <div>${formatDate(event.occurredAt)} · correlationId <span class="mono">${escapeHtml(event.correlationId)}</span></div>
       ${event.comment ? `<div>Комментарий: ${escapeHtml(event.comment)}</div>` : ""}
+      <details>
+        <summary>Детали</summary>
+        <dl class="kv-list audit-safe-details">
+          <dt>Audit id</dt>
+          <dd><span class="mono">${escapeHtml(event.auditId)}</span></dd>
+          <dt>Action</dt>
+          <dd>${escapeHtml(event.action)}</dd>
+          <dt>Target type</dt>
+          <dd>${escapeHtml(event.targetType)}</dd>
+          <dt>Target id</dt>
+          <dd><span class="mono">${escapeHtml(event.targetId)}</span></dd>
+          <dt>Actor</dt>
+          <dd>${escapeHtml(event.actorLogin || "system")}</dd>
+          <dt>Actor id</dt>
+          <dd><span class="mono">${escapeHtml(event.actorAdminId || "Нет данных")}</span></dd>
+          <dt>Occurred</dt>
+          <dd>${formatDate(event.occurredAt)}</dd>
+          <dt>Correlation</dt>
+          <dd><span class="mono">${escapeHtml(event.correlationId)}</span></dd>
+          <dt>Comment</dt>
+          <dd>${escapeHtml(event.comment || "Нет данных")}</dd>
+        </dl>
+      </details>
     `;
     list.appendChild(item);
   });
+}
+
+function renderAuditFilters() {
+  const filters = state.auditFilters || {};
+  setText("audit-count", `${state.audit.length} ${pluralizeRu(state.audit.length, "событие", "события", "событий")}`);
+
+  const applied = [
+    filters.action ? `действие: ${translateAction(filters.action)}` : "",
+    filters.targetType ? `объект: ${translateAuditTargetType(filters.targetType)}` : "",
+    filters.targetId ? `id: ${filters.targetId}` : "",
+    filters.actor ? `actor: ${filters.actor}` : "",
+    filters.occurredFrom ? `с: ${filters.occurredFrom}` : "",
+    filters.occurredTo ? `по: ${filters.occurredTo}` : "",
+    filters.limit && clampAuditLimit(filters.limit) !== "50" ? `limit: ${clampAuditLimit(filters.limit)}` : ""
+  ].filter(Boolean);
+
+  setText("audit-filter-summary", applied.length === 0
+    ? "Показаны последние события."
+    : applied.join(", "));
+}
+
+function translateAuditTargetType(targetType) {
+  const map = {
+    processing_job: "Processing job",
+    api_key: "API key",
+    admin_user: "Admin user"
+  };
+  return map[targetType] || targetType || "Нет данных";
+}
+
+function shortAuditTarget(value) {
+  if (!value) {
+    return "Нет данных";
+  }
+  return value.length > 16 ? `${value.slice(0, 8)}...${value.slice(-4)}` : value;
 }
 
 async function retryJob(job) {
@@ -1294,6 +1438,18 @@ function formatBytes(value) {
   }
   const precision = unitIndex === 0 ? 0 : 1;
   return `${size.toFixed(precision)} ${units[unitIndex]}`;
+}
+
+function pluralizeRu(count, one, few, many) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) {
+    return one;
+  }
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return few;
+  }
+  return many;
 }
 
 function setText(id, value) {

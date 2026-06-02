@@ -655,6 +655,14 @@ Endpoint требует admin session cookie, но не требует `X-CSRF-T
 
 Список audit показывает человеческое описание действия, а подробная metadata раскрывается в деталях.
 
+Текущий UI checkpoint:
+
+```text
+/admin -> Аудит
+```
+
+Экран `Аудит` поддерживает фильтры по action, target type, target id, actor, диапазону дат и limit. Список показывает количество найденных событий, краткое описание примененного фильтра и раскрываемые безопасные детали: audit id, action, target, actor, occurred, correlationId и comment. Raw value JSON, credentials, hashes, входные файлы и большие payload не выводятся.
+
 Audit обязателен для действий администратора, включая:
 
 ```text

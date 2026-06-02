@@ -77,7 +77,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-9");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-10");
 
         Assert.Contains("job-details-panel", html, StringComparison.Ordinal);
         Assert.Contains("support-report-button", html, StringComparison.Ordinal);
@@ -95,7 +95,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-9");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-10");
 
         Assert.Contains("processors-tab", html, StringComparison.Ordinal);
         Assert.Contains("processor-workers-body", html, StringComparison.Ordinal);
@@ -114,7 +114,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-9");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-10");
 
         Assert.Contains("health-tab", html, StringComparison.Ordinal);
         Assert.Contains("health-checks-body", html, StringComparison.Ordinal);
@@ -133,7 +133,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-9");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-10");
 
         Assert.Contains("delivery-tab", html, StringComparison.Ordinal);
         Assert.Contains("delivery-components-body", html, StringComparison.Ordinal);
@@ -152,7 +152,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-9");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-10");
 
         Assert.Contains("storage-tab", html, StringComparison.Ordinal);
         Assert.Contains("storage-summary-list", html, StringComparison.Ordinal);
@@ -171,7 +171,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-9");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-10");
 
         Assert.Contains("results-tab", html, StringComparison.Ordinal);
         Assert.Contains("results-body", html, StringComparison.Ordinal);
@@ -190,13 +190,34 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-9");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-10");
 
         Assert.Contains("settings-tab", html, StringComparison.Ordinal);
         Assert.Contains("settings-summary-list", html, StringComparison.Ordinal);
         Assert.Contains("settings-processor-list", html, StringComparison.Ordinal);
         Assert.Contains("renderSettingsDetails", js, StringComparison.Ordinal);
         Assert.Contains("/api/admin/settings", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Admin_ui_contains_audit_filter_surface()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = _factory.CreateClient();
+        var html = await client.GetStringAsync("/admin");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-10");
+
+        Assert.Contains("audit-filter-form", html, StringComparison.Ordinal);
+        Assert.Contains("audit-action-filter", html, StringComparison.Ordinal);
+        Assert.Contains("audit-target-type-filter", html, StringComparison.Ordinal);
+        Assert.Contains("audit-count", html, StringComparison.Ordinal);
+        Assert.Contains("buildAuditQuery", js, StringComparison.Ordinal);
+        Assert.Contains("renderAuditFilters", js, StringComparison.Ordinal);
+        Assert.Contains("audit-safe-details", js, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -97,6 +97,7 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - 2026-06-02: Admin Storage read-only checkpoint added: `GET /api/admin/storage` exposes temporary storage provider/root/status/used bytes/limits to admin sessions, and `/admin -> Storage` shows capacity risk without listing files or offering cleanup actions.
 - 2026-06-02: Admin Results read-only checkpoint added: `GET /api/admin/results` and `GET /api/admin/results/{resultIndexId}` expose result index metadata to admin sessions, while `/admin -> Results` lists result references/details without raw JSON payload or input PDF.
 - 2026-06-02: Admin Settings read-only checkpoint added: `GET /api/admin/settings` exposes safe runtime configuration for upload limits, temporary storage limits, `pdf2txt-http-recognizer` defaults, sanitized endpoint pool, and MVP boundary without credentials, connection strings, or editing actions.
+- 2026-06-02: Admin Audit UI checkpoint added: `/admin -> Аудит` now has action/target/actor/date/limit filters, event count/summary, and expandable safe details for audit metadata without raw value JSON, credentials, hashes, or payload.
 
 ## Workflow Rules
 
@@ -106,4 +107,4 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-06-02 after Admin Settings checkpoint*
+*Last updated: 2026-06-02 after Admin Audit UI checkpoint*
