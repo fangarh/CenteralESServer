@@ -37,7 +37,8 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Centeral ES Admin", html, StringComparison.Ordinal);
-        Assert.Contains("/admin/app.js", html, StringComparison.Ordinal);
+        Assert.Contains("/admin/app.css?v=", html, StringComparison.Ordinal);
+        Assert.Contains("/admin/app.js?v=", html, StringComparison.Ordinal);
     }
 
     [Fact]
