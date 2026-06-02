@@ -93,6 +93,7 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - 2026-06-02: Admin UI Job Details added: failed/blocked jobs can open details with identifiers, timestamps, diagnostics, attempt history, single-job retry, and downloadable support report JSON.
 - 2026-06-02: Admin UI Processor Details added for `pdf2txt-http-recognizer`: passive health, queue counts, worker heartbeats, recent diagnostics, and explicit MVP boundary for future endpoint/concurrency editing.
 - 2026-06-02: Admin UI Health screen added: `/health/live` and `/health/ready` are shown as local checks for Web/PostgreSQL/schema/temporary storage without invoking external `pdf2txt`.
+- 2026-06-02: Admin UI Delivery screen added: read-only MVP composition view for Web, Worker, PostgreSQL, processing schema, temporary storage, `pdf2txt-http-recognizer`, API keys, and local `dotnet run` commands without Docker.
 
 ## Workflow Rules
 
@@ -102,4 +103,4 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-06-02 after Admin UI Health checkpoint*
+*Last updated: 2026-06-02 after Admin UI Delivery checkpoint*

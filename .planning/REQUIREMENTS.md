@@ -108,7 +108,7 @@
 | STORE-02 | Phase 1 | Done |
 | STORE-03 | Phase 1 | Done |
 | STORE-04 | Phase 2 | Done |
-| ADMIN-01 | Phase 1 | Done: `/admin` UI shell, Jobs/Job Details, Processor Details plus Admin API |
+| ADMIN-01 | Phase 1 | Done: `/admin` UI shell, Jobs/Job Details, Processor Details, Health, Delivery plus Admin API |
 | ADMIN-02 | Phase 2 | Done: Backend endpoint plus UI action for single-job retry |
 | ADMIN-03 | Phase 2 | Partial: manual retry/API key/admin user audit and audit read API done |
 | ADMIN-04 | Phase 2 | Done: Backend support report endpoint plus UI download action |
@@ -124,4 +124,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-02 after Admin UI Health checkpoint*
+*Last updated: 2026-06-02 after Admin UI Delivery checkpoint*

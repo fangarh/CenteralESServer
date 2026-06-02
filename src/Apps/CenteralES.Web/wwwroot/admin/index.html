@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Centeral ES Admin</title>
-  <link rel="stylesheet" href="/admin/app.css?v=20260602-5">
+  <link rel="stylesheet" href="/admin/app.css?v=20260602-6">
 </head>
 <body>
   <div class="app-shell">
@@ -18,6 +18,7 @@
       </div>
       <nav class="nav">
         <button class="nav-item is-active" type="button" data-tab="overview">Сводка</button>
+        <button class="nav-item" type="button" data-tab="delivery">Поставка</button>
         <button class="nav-item" type="button" data-tab="jobs">Задачи</button>
         <button class="nav-item" type="button" data-tab="processors">Обработчик</button>
         <button class="nav-item" type="button" data-tab="health">Проверки</button>
@@ -87,6 +88,48 @@
               <button class="secondary-button" type="button" data-tab-jump="jobs">Открыть задачи</button>
             </div>
             <div id="overview-actions" class="work-list"></div>
+          </div>
+        </section>
+
+        <section id="delivery-tab" class="tab-panel" hidden>
+          <div class="section-band">
+            <div class="section-header">
+              <div>
+                <h2>Поставка</h2>
+                <p>Состав MVP-установки и локальный запуск без Docker.</p>
+              </div>
+              <button id="refresh-delivery-button" class="secondary-button" type="button">Обновить поставку</button>
+            </div>
+            <div class="details-grid">
+              <div class="detail-block">
+                <h3>Локальный запуск</h3>
+                <dl id="delivery-runtime-list" class="kv-list"></dl>
+              </div>
+              <div class="detail-block">
+                <h3>Граница поставки</h3>
+                <div class="report-summary">
+                  <div>Docker Compose остается основным будущим путем поставки MVP.</div>
+                  <div>Дома можно тестировать Web и Worker через <code>dotnet run</code> с локальным PostgreSQL из <code>db.env</code>.</div>
+                  <div>Windows Service не входит в MVP, потому что Docker закрывает эту потребность для целевого контура.</div>
+                </div>
+              </div>
+            </div>
+            <div class="detail-block">
+              <h3>Компоненты</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Компонент</th>
+                      <th>Роль</th>
+                      <th>Текущий сигнал</th>
+                      <th>Комментарий</th>
+                    </tr>
+                  </thead>
+                  <tbody id="delivery-components-body"></tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -423,6 +466,6 @@
     </form>
   </dialog>
 
-  <script src="/admin/app.js?v=20260602-5"></script>
+  <script src="/admin/app.js?v=20260602-6"></script>
 </body>
 </html>

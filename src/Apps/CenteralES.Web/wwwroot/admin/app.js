@@ -14,6 +14,7 @@ const state = {
 
 const titles = {
   overview: ["Сводка", "Состояние очереди, обработчика и действий, которые требуют внимания."],
+  delivery: ["Поставка", "Состав MVP-установки и локальный запуск без Docker."],
   jobs: ["Задачи", "Упавшие задачи и ручной retry."],
   processors: ["Обработчик", "Пассивное состояние PDF-обработчика, очередь, workers и diagnostics."],
   health: ["Проверки", "Локальные readiness checks без внешнего pdf2txt-вызова."],
@@ -99,7 +100,14 @@ function bindSessionActions() {
   document.getElementById("refresh-health-button").addEventListener("click", async () => {
     await loadHealth();
     renderHealthDetails();
+    renderDeliveryDetails();
     showAlert("Проверки обновлены.");
+  });
+  document.getElementById("refresh-delivery-button").addEventListener("click", async () => {
+    await Promise.all([loadHealth(), loadProcessor(), loadApiKeys()]);
+    renderDeliveryDetails();
+    renderOverview();
+    showAlert("Поставка обновлена.");
   });
   document.getElementById("logout-button").addEventListener("click", logout);
   document.getElementById("retry-detail-button").addEventListener("click", () => {
@@ -221,6 +229,7 @@ function renderAll() {
   renderJobDetails();
   renderProcessorDetails();
   renderHealthDetails();
+  renderDeliveryDetails();
 }
 
 function renderOverview() {
@@ -378,6 +387,79 @@ function renderHealthDetails() {
       <td>${escapeHtml(translateHealthCheckName(check.name))}</td>
       <td>${statusPill(check.status)}</td>
       <td>${escapeHtml(describeHealthCheck(check.name, check.status))}</td>
+    `;
+    body.appendChild(row);
+  });
+}
+
+function renderDeliveryDetails() {
+  const readyChecks = state.health?.ready?.checks || [];
+  const checkStatus = new Map(readyChecks.map(check => [check.name, check.status]));
+  const activeKeys = state.apiKeys.filter(key => key.isActive).length;
+  const workerCount = state.processor?.workers?.length ?? 0;
+
+  renderDefinitionList("delivery-runtime-list", [
+    ["Admin UI", "/admin"],
+    ["Web", "dotnet run --project src\\Apps\\CenteralES.Web\\CenteralES.Web.csproj"],
+    ["Worker", "dotnet run --project src\\Apps\\CenteralES.Worker\\CenteralES.Worker.csproj"],
+    ["Database config", "db.env"],
+    ["Admin credentials", "logon.env"]
+  ]);
+
+  const components = [
+    {
+      name: "CenteralES.Web",
+      role: "Public API, Admin API, Admin UI, health endpoints",
+      status: state.health?.live?.status || "unknown",
+      comment: "Отдается локально через ASP.NET Core."
+    },
+    {
+      name: "CenteralES.Worker",
+      role: "Фоновая обработка очереди PDF",
+      status: workerCount > 0 ? "healthy" : "unknown",
+      comment: workerCount > 0 ? `worker heartbeat: ${workerCount}` : "Heartbeat появится после запуска Worker."
+    },
+    {
+      name: "PostgreSQL",
+      role: "Очередь, результаты, admin/auth/audit",
+      status: checkStatus.get("postgres") || "unknown",
+      comment: "Проверяется через /health/ready."
+    },
+    {
+      name: "Processing schema",
+      role: "Совместимость таблиц MVP",
+      status: checkStatus.get("processingSchema") || "unknown",
+      comment: "Web применяет схему при старте."
+    },
+    {
+      name: "Temporary storage",
+      role: "Временное хранение входных PDF до terminal state",
+      status: checkStatus.get("temporaryStorage") || "unknown",
+      comment: "Проверяется запись, чтение и capacity guard."
+    },
+    {
+      name: "pdf2txt-http-recognizer",
+      role: "Внешний обработчик PDF stamp recognition",
+      status: state.processor?.health || "unknown",
+      comment: "В админке показывается passive status без вызова /recognize_json/."
+    },
+    {
+      name: "API keys",
+      role: "Доступ клиента ЭП к Public API",
+      status: activeKeys > 0 ? "healthy" : "unknown",
+      comment: activeKeys > 0 ? `активных ключей: ${activeKeys}` : "Создаются на вкладке Ключи API."
+    }
+  ];
+
+  const body = document.getElementById("delivery-components-body");
+  body.innerHTML = "";
+  components.forEach(component => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${escapeHtml(component.name)}</td>
+      <td>${escapeHtml(component.role)}</td>
+      <td>${statusPill(component.status)}</td>
+      <td>${escapeHtml(component.comment)}</td>
     `;
     body.appendChild(row);
   });
