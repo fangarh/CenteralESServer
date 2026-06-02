@@ -108,7 +108,7 @@
 | STORE-02 | Phase 1 | Done: lightweight result index plus Admin Results metadata visibility |
 | STORE-03 | Phase 1 | Done: PDF payload store, with Admin Results avoiding raw payload exposure |
 | STORE-04 | Phase 2 | Done: hard-limit upload guard plus Admin Storage capacity visibility |
-| ADMIN-01 | Phase 1 | Done: `/admin` UI shell, Jobs/Job Details, Results, Processor Details, Health, Delivery, Storage plus Admin API |
+| ADMIN-01 | Phase 1 | Done: `/admin` UI shell, Jobs/Job Details, Results, Processor Details, Health, Delivery, Storage, Settings plus Admin API |
 | ADMIN-02 | Phase 2 | Done: Backend endpoint plus UI action for single-job retry |
 | ADMIN-03 | Phase 2 | Partial: manual retry/API key/admin user audit and audit read API done |
 | ADMIN-04 | Phase 2 | Done: Backend support report endpoint plus UI download action |
@@ -124,4 +124,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-02 after Admin Results checkpoint*
+*Last updated: 2026-06-02 after Admin Settings checkpoint*

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Centeral ES Admin</title>
-  <link rel="stylesheet" href="/admin/app.css?v=20260602-8">
+  <link rel="stylesheet" href="/admin/app.css?v=20260602-9">
 </head>
 <body>
   <div class="app-shell">
@@ -24,6 +24,7 @@
         <button class="nav-item" type="button" data-tab="processors">Обработчик</button>
         <button class="nav-item" type="button" data-tab="health">Проверки</button>
         <button class="nav-item" type="button" data-tab="storage">Storage</button>
+        <button class="nav-item" type="button" data-tab="settings">Settings</button>
         <button class="nav-item" type="button" data-tab="apiKeys">Ключи API</button>
         <button class="nav-item" type="button" data-tab="users">Администраторы</button>
         <button class="nav-item" type="button" data-tab="audit">Аудит</button>
@@ -448,6 +449,42 @@
           </div>
         </section>
 
+        <section id="settings-tab" class="tab-panel" hidden>
+          <div class="section-band">
+            <div class="section-header">
+              <div>
+                <h2>Settings</h2>
+                <p>Безопасная read-only сводка runtime-настроек MVP без секретов и строк подключения.</p>
+              </div>
+              <button id="refresh-settings-button" class="secondary-button" type="button">Обновить settings</button>
+            </div>
+            <div class="details-grid">
+              <div class="detail-block">
+                <h3>Public API</h3>
+                <dl id="settings-summary-list" class="kv-list"></dl>
+              </div>
+              <div class="detail-block">
+                <h3>Temporary storage</h3>
+                <dl id="settings-storage-list" class="kv-list"></dl>
+              </div>
+            </div>
+            <div class="details-grid">
+              <div class="detail-block">
+                <h3>PDF processor</h3>
+                <dl id="settings-processor-list" class="kv-list"></dl>
+              </div>
+              <div class="detail-block">
+                <h3>Граница MVP</h3>
+                <dl id="settings-boundary-list" class="kv-list"></dl>
+              </div>
+            </div>
+            <div class="detail-block">
+              <h3>Endpoint pool</h3>
+              <div id="settings-endpoints-list" class="work-list"></div>
+            </div>
+          </div>
+        </section>
+
         <section id="apiKeys-tab" class="tab-panel" hidden>
           <div class="section-band">
             <div class="section-header">
@@ -563,6 +600,6 @@
     </form>
   </dialog>
 
-  <script src="/admin/app.js?v=20260602-8"></script>
+  <script src="/admin/app.js?v=20260602-9"></script>
 </body>
 </html>

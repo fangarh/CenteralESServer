@@ -9,6 +9,7 @@ const state = {
   processor: null,
   health: null,
   storage: null,
+  settings: null,
   selectedJobDetails: null,
   selectedSupportReport: null,
   selectedResult: null,
@@ -23,6 +24,7 @@ const titles = {
   processors: ["Обработчик", "Пассивное состояние PDF-обработчика, очередь, workers и diagnostics."],
   health: ["Проверки", "Локальные readiness checks без внешнего pdf2txt-вызова."],
   storage: ["Storage", "Временное хранилище, лимиты и риск блокировки новых upload-ов."],
+  settings: ["Settings", "Read-only runtime-настройки MVP без секретов и строк подключения."],
   apiKeys: ["Ключи API", "Доступ клиента ЭП к публичному API."],
   users: ["Администраторы", "Учетные записи, пароли и отключение доступа."],
   audit: ["Аудит", "Журнал опасных admin-действий."]
@@ -120,6 +122,11 @@ function bindSessionActions() {
     renderOverview();
     showAlert("Storage обновлен.");
   });
+  document.getElementById("refresh-settings-button").addEventListener("click", async () => {
+    await loadSettings();
+    renderSettingsDetails();
+    showAlert("Settings обновлены.");
+  });
   document.getElementById("logout-button").addEventListener("click", logout);
   document.getElementById("retry-detail-button").addEventListener("click", () => {
     if (state.selectedJobDetails) {
@@ -183,6 +190,7 @@ async function refreshData() {
       loadProcessor(),
       loadHealth(),
       loadStorage(),
+      loadSettings(),
       loadApiKeys(),
       loadUsers(),
       loadAudit()
@@ -243,6 +251,10 @@ async function loadStorage() {
   state.storage = await apiGet("/api/admin/storage");
 }
 
+async function loadSettings() {
+  state.settings = await apiGet("/api/admin/settings");
+}
+
 function renderAll() {
   renderOverview();
   renderJobs();
@@ -256,6 +268,7 @@ function renderAll() {
   renderHealthDetails();
   renderDeliveryDetails();
   renderStorageDetails();
+  renderSettingsDetails();
 }
 
 function renderOverview() {
@@ -560,6 +573,91 @@ function renderStorageDetails() {
     ["Minimum free", formatBytes(temporary.minimumFreeBytes)],
     ["Free on volume", formatBytes(temporary.availableFreeBytes)]
   ]);
+}
+
+function renderSettingsDetails() {
+  const settings = state.settings;
+  if (!settings) {
+    renderDefinitionList("settings-summary-list", [
+      ["Max upload", "Нет данных"]
+    ]);
+    renderDefinitionList("settings-storage-list", [
+      ["Temporary root", "Нет данных"],
+      ["Soft limit", "Нет данных"],
+      ["Hard limit", "Нет данных"],
+      ["Minimum free", "Нет данных"]
+    ]);
+    renderDefinitionList("settings-processor-list", [
+      ["Processor key", "Нет данных"],
+      ["Capability", "Нет данных"],
+      ["Recognizer", "Нет данных"],
+      ["Endpoints", "Нет данных"],
+      ["Pool concurrency", "Нет данных"],
+      ["Endpoint concurrency", "Нет данных"],
+      ["Timeout", "Нет данных"],
+      ["Max attempts", "Нет данных"],
+      ["Overloaded delay", "Нет данных"],
+      ["Contract", "Нет данных"]
+    ]);
+    renderDefinitionList("settings-boundary-list", [
+      ["Read only", "Да"],
+      ["Editing enabled", "Нет"],
+      ["Note", "Settings еще не загружены."]
+    ]);
+    renderEndpointPool([]);
+    return;
+  }
+
+  const publicApi = settings.publicApi || {};
+  const storage = settings.storage || {};
+  const processor = settings.processor || {};
+  const boundary = settings.boundary || {};
+
+  renderDefinitionList("settings-summary-list", [
+    ["Max upload", formatBytes(publicApi.maxUploadBytes)],
+    ["Max upload bytes", publicApi.maxUploadBytes ?? "Нет данных"]
+  ]);
+
+  renderDefinitionList("settings-storage-list", [
+    ["Temporary root", storage.temporaryRootPath],
+    ["Soft limit", formatBytes(storage.temporarySoftLimitBytes)],
+    ["Hard limit", formatBytes(storage.temporaryHardLimitBytes)],
+    ["Minimum free", formatBytes(storage.temporaryMinimumFreeBytes)]
+  ]);
+
+  renderDefinitionList("settings-processor-list", [
+    ["Processor key", processor.processorKey],
+    ["Capability", processor.capability],
+    ["Recognizer", processor.recognizer],
+    ["Endpoints", processor.endpointCount ?? 0],
+    ["Pool concurrency", processor.poolConcurrencyLimit],
+    ["Endpoint concurrency", processor.endpointConcurrencyLimit],
+    ["Timeout", processor.timeout],
+    ["Max attempts", processor.maxAttempts],
+    ["Overloaded delay", processor.processorOverloadedDelay],
+    ["Contract", processor.contractVersion]
+  ]);
+
+  renderDefinitionList("settings-boundary-list", [
+    ["Read only", formatBool(boundary.readOnly)],
+    ["Editing enabled", formatBool(boundary.editingEnabled)],
+    ["Note", boundary.note]
+  ]);
+
+  renderEndpointPool(processor.endpointPool || []);
+}
+
+function renderEndpointPool(endpoints) {
+  const list = document.getElementById("settings-endpoints-list");
+  list.innerHTML = "";
+  if (endpoints.length === 0) {
+    list.appendChild(workItem("Endpoint pool пуст", "Для Web это допустимо: фактическая обработка выполняется Worker-конфигурацией."));
+    return;
+  }
+
+  endpoints.forEach((endpoint, index) => {
+    list.appendChild(workItem(`Endpoint ${index + 1}`, endpoint));
+  });
 }
 
 function describeStorageRisk(temporary) {

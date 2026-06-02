@@ -77,7 +77,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-8");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-9");
 
         Assert.Contains("job-details-panel", html, StringComparison.Ordinal);
         Assert.Contains("support-report-button", html, StringComparison.Ordinal);
@@ -95,7 +95,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-8");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-9");
 
         Assert.Contains("processors-tab", html, StringComparison.Ordinal);
         Assert.Contains("processor-workers-body", html, StringComparison.Ordinal);
@@ -114,7 +114,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-8");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-9");
 
         Assert.Contains("health-tab", html, StringComparison.Ordinal);
         Assert.Contains("health-checks-body", html, StringComparison.Ordinal);
@@ -133,7 +133,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-8");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-9");
 
         Assert.Contains("delivery-tab", html, StringComparison.Ordinal);
         Assert.Contains("delivery-components-body", html, StringComparison.Ordinal);
@@ -152,7 +152,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-8");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-9");
 
         Assert.Contains("storage-tab", html, StringComparison.Ordinal);
         Assert.Contains("storage-summary-list", html, StringComparison.Ordinal);
@@ -171,13 +171,75 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-8");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-9");
 
         Assert.Contains("results-tab", html, StringComparison.Ordinal);
         Assert.Contains("results-body", html, StringComparison.Ordinal);
         Assert.Contains("result-details-panel", html, StringComparison.Ordinal);
         Assert.Contains("renderResults", js, StringComparison.Ordinal);
         Assert.Contains("/api/admin/results", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Admin_ui_contains_settings_surface()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = _factory.CreateClient();
+        var html = await client.GetStringAsync("/admin");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-9");
+
+        Assert.Contains("settings-tab", html, StringComparison.Ordinal);
+        Assert.Contains("settings-summary-list", html, StringComparison.Ordinal);
+        Assert.Contains("settings-processor-list", html, StringComparison.Ordinal);
+        Assert.Contains("renderSettingsDetails", js, StringComparison.Ordinal);
+        Assert.Contains("/api/admin/settings", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Admin_settings_requires_admin_session()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/api/admin/settings");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("unauthorized", payload.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Admin_settings_returns_safe_runtime_configuration()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var admin = await CreateAdminClientAsync(_factory);
+        var response = await admin.Client.GetAsync("/api/admin/settings");
+        var body = await response.Content.ReadAsStringAsync();
+        var payload = JsonSerializer.Deserialize<JsonElement>(body);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(262144000, payload.GetProperty("publicApi").GetProperty("maxUploadBytes").GetInt64());
+        Assert.True(payload.GetProperty("storage").TryGetProperty("temporaryRootPath", out _));
+        Assert.Equal("pdf2txt-http-recognizer", payload.GetProperty("processor").GetProperty("processorKey").GetString());
+        Assert.Equal("pdf-stamp-recognition", payload.GetProperty("processor").GetProperty("capability").GetString());
+        Assert.True(payload.GetProperty("processor").TryGetProperty("endpointCount", out _));
+        Assert.True(payload.GetProperty("processor").TryGetProperty("maxAttempts", out _));
+        Assert.True(payload.GetProperty("processor").TryGetProperty("processorOverloadedDelay", out _));
+        Assert.DoesNotContain("password", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("connectionString", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CENTERALES_PROCESSING_DATABASE", body, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

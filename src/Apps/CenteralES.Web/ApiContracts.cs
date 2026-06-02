@@ -217,6 +217,38 @@ internal sealed record AdminTemporaryStorageResponse(
     long? AvailableFreeBytes,
     long? MinimumFreeBytes);
 
+internal sealed record AdminSettingsResponse(
+    AdminPublicApiSettingsResponse PublicApi,
+    AdminStorageSettingsResponse Storage,
+    AdminProcessorSettingsResponse Processor,
+    AdminSettingsBoundaryResponse Boundary);
+
+internal sealed record AdminPublicApiSettingsResponse(long MaxUploadBytes);
+
+internal sealed record AdminStorageSettingsResponse(
+    string TemporaryRootPath,
+    long? TemporaryHardLimitBytes,
+    long? TemporarySoftLimitBytes,
+    long? TemporaryMinimumFreeBytes);
+
+internal sealed record AdminProcessorSettingsResponse(
+    string ProcessorKey,
+    string Capability,
+    string Recognizer,
+    int EndpointCount,
+    IReadOnlyList<string> EndpointPool,
+    int PoolConcurrencyLimit,
+    int EndpointConcurrencyLimit,
+    string Timeout,
+    int MaxAttempts,
+    string ProcessorOverloadedDelay,
+    string ContractVersion);
+
+internal sealed record AdminSettingsBoundaryResponse(
+    bool ReadOnly,
+    bool EditingEnabled,
+    string Note);
+
 internal sealed record AdminResultListResponse(IReadOnlyList<AdminResultResponse> Results);
 
 internal sealed record AdminResultResponse(

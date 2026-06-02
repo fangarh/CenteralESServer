@@ -74,7 +74,7 @@ Scope:
 - Health screen;
 - Audit screen;
 - Admin Users;
-- Settings как узкий общесистемный экран.
+- Settings read-only baseline done; editing remains later.
 
 ## Deferred
 
@@ -95,4 +95,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-02 after Admin Results checkpoint*
+*Last updated: 2026-06-02 after Admin Settings checkpoint*

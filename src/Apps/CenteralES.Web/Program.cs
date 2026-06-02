@@ -30,6 +30,7 @@ builder.Services.AddSingleton<IPdfStampRecognitionResultStore, PostgresPdfStampR
 builder.Services.AddSingleton<ITemporaryFileStore>(_ => new LocalTemporaryFileStore(temporaryStorageRoot));
 builder.Services.AddSingleton<ITemporaryStorageMonitor>(_ => new LocalTemporaryStorageMonitor(temporaryStorageRoot, temporaryStorageLimits));
 builder.Services.AddSingleton(new AdminStorageOptions(temporaryStorageRoot));
+builder.Services.AddSingleton(new AdminSettingsOptions(pdfMaxUploadBytes, temporaryStorageRoot, temporaryStorageLimits));
 builder.Services.AddSingleton<IAdminProcessingReadStore, PostgresAdminProcessingReadStore>();
 builder.Services.AddSingleton<IAdminProcessingActionStore, PostgresAdminProcessingActionStore>();
 builder.Services.AddSingleton<IAdminApiKeyStore, PostgresAdminApiKeyStore>();
@@ -56,6 +57,7 @@ app.MapAdminProcessorEndpoints();
 app.MapAdminAuditEndpoints();
 app.MapAdminStorageEndpoints();
 app.MapAdminResultEndpoints();
+app.MapAdminSettingsEndpoints();
 app.MapAdminApiKeyEndpoints();
 app.MapAdminUserEndpoints();
 
