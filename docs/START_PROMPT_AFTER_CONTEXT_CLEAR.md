@@ -8,6 +8,10 @@
 Рабочая папка:
 D:\Projects\DT1520\CenteralESServer
 
+Опорные commits перед очисткой контекста:
+- `a202d64 Record latest admin checkpoints in Obsidian`
+- `7585e0b Expose MVP retention policy visibility`
+
 Отвечай по-русски.
 
 Обязательные правила:
@@ -62,14 +66,26 @@ D:\Projects\DT1520\CenteralESServer
 - WinForms test client расширен вкладкой `MVP сервисы`: получает текущий MVP service list через `GET /api/admin/services`, тестирует `/health/live`, `/health/ready`, passive processor status и опциональный Public PDF upload/polling при наличии API key и PDF.
 - Docker Compose еще не реализован и сейчас исключен из работы.
 
-Проверки последнего WinForms bootstrap smoke checkpoint:
+Проверки последнего кодового checkpoint-а `Expose MVP retention policy visibility`:
+- dotnet build CenteralESServer.sln --no-restore -maxcpucount:1 -v:minimal
+  Результат: passed
+- node --check src\Apps\CenteralES.Web\wwwroot\admin\app.js
+  Результат: passed
+- targeted storage/settings integration slice
+  Результат: 6 passed
+- full solution
+  Результат: 50 unit + 54 integration passed
+- git diff --check
+  Результат: passed
+- C:\Users\Admin\.dotnet\dotnet.exe отсутствует в текущем окружении; проверки выполнялись системным dotnet.
+
+Проверки WinForms bootstrap smoke checkpoint:
 - powershell -ExecutionPolicy Bypass -File .\.codex-local\run-admin-bootstrap-smoke.ps1
   Результат: 1 integration test passed
 - dotnet build CenteralESServer.sln --no-restore -maxcpucount:1 -v:minimal
   Результат: passed
 - dotnet test CenteralESServer.sln --no-build --no-restore -maxcpucount:1 -v:minimal
   Результат: 50 unit + 54 integration passed
-- C:\Users\Admin\.dotnet\dotnet.exe отсутствует в текущем окружении; проверки выполнялись системным dotnet.
 
 Следующий логичный шаг без Docker:
 Admin UI polish для Result Details/Debug JSON или cleanup dry-run planning без Docker.
