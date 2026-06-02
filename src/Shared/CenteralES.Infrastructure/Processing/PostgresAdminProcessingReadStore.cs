@@ -361,6 +361,29 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
         return new AdminResultDetails(reference, summary);
     }
 
+    public async Task<AdminPdfStampRecognitionPayload?> GetPdfStampRecognitionPayloadAsync(
+        Guid payloadId,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("""
+            select id, payload_json::text
+            from pdf_stamp_recognition_results
+            where id = @payload_id;
+            """, connection);
+        command.Parameters.AddWithValue("payload_id", payloadId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new AdminPdfStampRecognitionPayload(
+            reader.GetGuid(0),
+            reader.GetString(1));
+    }
+
     private static async Task<AdminPdfStampRecognitionResultSummary?> ReadPdfStampRecognitionSummaryAsync(
         NpgsqlConnection connection,
         Guid payloadId,

@@ -176,8 +176,10 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         Assert.Contains("results-tab", html, StringComparison.Ordinal);
         Assert.Contains("results-body", html, StringComparison.Ordinal);
         Assert.Contains("result-details-panel", html, StringComparison.Ordinal);
+        Assert.Contains("debug-result-payload-button", html, StringComparison.Ordinal);
         Assert.Contains("renderResults", js, StringComparison.Ordinal);
         Assert.Contains("/api/admin/results", js, StringComparison.Ordinal);
+        Assert.Contains("/payload", js, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -379,6 +381,63 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         Assert.False(payload.TryGetProperty("result", out _));
         Assert.DoesNotContain("hidden payload", body, StringComparison.Ordinal);
         Assert.DoesNotContain("payloadJson", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Admin_result_payload_requires_admin_session()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var completed = await CreateCompletedResultAsync();
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync($"/api/admin/results/{completed.ResultIndexId:N}/payload");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("unauthorized", payload.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Admin_result_payload_returns_controlled_raw_json_for_pdf_results()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var completed = await CreateCompletedResultAsync();
+        var admin = await CreateAdminClientAsync(_factory);
+        var response = await admin.Client.GetAsync($"/api/admin/results/{completed.ResultIndexId:N}/payload");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(completed.ResultIndexId.ToString("N"), payload.GetProperty("resultIndexId").GetString());
+        Assert.Equal("pdf_stamp_recognition_results", payload.GetProperty("payloadTable").GetString());
+        Assert.Equal("test-v1", payload.GetProperty("contractVersion").GetString());
+        Assert.True(payload.GetProperty("payloadSize").GetInt64() > 0);
+        Assert.Contains("Debug endpoint", payload.GetProperty("warning").GetString(), StringComparison.Ordinal);
+        Assert.Equal("admin-results-test", payload.GetProperty("payload").GetProperty("source").GetString());
+        Assert.Equal("hidden payload", payload.GetProperty("payload").GetProperty("people")[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task Admin_result_payload_rejects_unsupported_payload_table()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var resultIndexId = await CreateUnsupportedResultReferenceAsync();
+        var admin = await CreateAdminClientAsync(_factory);
+        var response = await admin.Client.GetAsync($"/api/admin/results/{resultIndexId:N}/payload");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal("unsupported_payload_table", payload.GetProperty("error").GetProperty("code").GetString());
     }
 
     [Fact]
@@ -1371,6 +1430,67 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
             CancellationToken.None);
 
         return new CompletedResultFixture(saved.ResultIndexId, enqueued.JobId, hash);
+    }
+
+    private static async Task<Guid> CreateUnsupportedResultReferenceAsync()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString()
+            ?? throw new InvalidOperationException("Test database is not configured.");
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var now = DateTimeOffset.UtcNow;
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var hash = $"sha256:{Guid.NewGuid():N}";
+        var enqueued = await queue.EnqueueAsync(
+            new CreateProcessingJobCommand(
+                PdfStampRecognitionConstants.Capability,
+                hash,
+                $"temp/{Guid.NewGuid():N}.pdf",
+                now),
+            CancellationToken.None);
+
+        var resultIndexId = Guid.NewGuid();
+        await using var connection = await dataSource.OpenConnectionAsync(CancellationToken.None);
+        await using var command = new NpgsqlCommand("""
+            insert into processing_result_index (
+                id,
+                subject_id,
+                capability,
+                content_hash,
+                job_id,
+                result_kind,
+                payload_table,
+                payload_id,
+                contract_version,
+                payload_size,
+                created_at)
+            select
+                @id,
+                subject_id,
+                capability,
+                content_hash,
+                id,
+                'json',
+                'unsupported_debug_payloads',
+                @payload_id,
+                'unsupported-test-v1',
+                32,
+                @created_at
+            from processing_jobs
+            where id = @job_id;
+            """, connection);
+        command.Parameters.AddWithValue("id", resultIndexId);
+        command.Parameters.AddWithValue("payload_id", Guid.NewGuid());
+        command.Parameters.AddWithValue("created_at", now.AddSeconds(1));
+        command.Parameters.AddWithValue("job_id", enqueued.JobId);
+        await command.ExecuteNonQueryAsync(CancellationToken.None);
+
+        return resultIndexId;
     }
 
     private static async Task ResetProcessingTablesAsync(NpgsqlDataSource dataSource, CancellationToken cancellationToken)

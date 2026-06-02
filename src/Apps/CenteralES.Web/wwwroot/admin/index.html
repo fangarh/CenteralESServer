@@ -234,7 +234,10 @@
                   <h2 id="result-details-title">Детали результата</h2>
                   <p id="result-details-subtitle">Metadata результата и ссылка на связанную job.</p>
                 </div>
-                <button id="close-result-details-button" class="secondary-button" type="button">Закрыть</button>
+                <div class="button-row">
+                  <button id="debug-result-payload-button" class="secondary-button" type="button">Debug JSON</button>
+                  <button id="close-result-details-button" class="secondary-button" type="button">Закрыть</button>
+                </div>
               </div>
               <div class="detail-block">
                 <h3>Metadata</h3>
@@ -247,8 +250,8 @@
               <div class="detail-block">
                 <h3>Граница MVP</h3>
                 <div class="report-summary">
-                  <div>Этот экран не возвращает raw JSON payload и не показывает входной PDF.</div>
-                  <div>Payload table и payload id нужны для поддержки и диагностики, но не являются ссылкой для скачивания.</div>
+                  <div>Обычный summary не содержит raw JSON payload и не показывает входной PDF.</div>
+                  <div>Debug JSON доступен отдельным endpoint-ом только для аутентифицированного администратора.</div>
                   <div>Summary строится из безопасных счетчиков и коротких excerpts без полного payload.</div>
                 </div>
               </div>

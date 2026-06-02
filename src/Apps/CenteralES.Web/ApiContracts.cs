@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 internal sealed record HealthResponse(string Status, DateTimeOffset CheckedAt);
 
@@ -313,6 +314,15 @@ internal sealed record AdminPdfStampRecognitionResultSummaryResponse(
     string? IzmNumber,
     IReadOnlyList<string> PageKeys,
     IReadOnlyList<string> ErrorExcerpts);
+
+internal sealed record AdminResultPayloadResponse(
+    string ResultIndexId,
+    string PayloadTable,
+    string PayloadId,
+    string ContractVersion,
+    long PayloadSize,
+    string Warning,
+    JsonNode Payload);
 
 internal sealed record AdminApiKeyListResponse(IReadOnlyList<AdminApiKeyResponse> Keys);
 

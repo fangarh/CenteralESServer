@@ -225,6 +225,7 @@ function bindSessionActions() {
   });
   document.getElementById("support-report-button").addEventListener("click", downloadSupportReport);
   document.getElementById("close-job-details-button").addEventListener("click", clearJobDetails);
+  document.getElementById("debug-result-payload-button").addEventListener("click", downloadResultPayload);
   document.getElementById("close-result-details-button").addEventListener("click", clearResultDetails);
 }
 
@@ -942,6 +943,8 @@ function renderResultDetails() {
 
   setText("result-details-title", `Результат ${shortId(result.resultIndexId)}`);
   setText("result-details-subtitle", `${result.capability}: ${result.hash}`);
+  const payloadButton = document.getElementById("debug-result-payload-button");
+  payloadButton.disabled = result.payloadTable !== "pdf_stamp_recognition_results";
   renderDefinitionList("result-details-meta", [
     ["Result index", result.resultIndexId],
     ["Subject", result.subjectId],
@@ -985,6 +988,31 @@ function renderResultSummary(summary) {
 function clearResultDetails() {
   state.selectedResult = null;
   renderResultDetails();
+}
+
+async function downloadResultPayload() {
+  if (!state.selectedResult) {
+    showAlert("Сначала откройте детали результата.", true);
+    return;
+  }
+
+  try {
+    const resultIndexId = state.selectedResult.resultIndexId;
+    const payload = await apiGet(`/api/admin/results/${encodeURIComponent(resultIndexId)}/payload`);
+    const blob = new Blob(
+      [JSON.stringify(payload, null, 2)],
+      { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `centerales-result-payload-${shortId(resultIndexId)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+    showAlert("Debug JSON payload скачан.");
+  } catch (error) {
+    showAlert(error.message || "Не удалось скачать debug payload.", true);
+  }
 }
 
 function clearJobDetails() {

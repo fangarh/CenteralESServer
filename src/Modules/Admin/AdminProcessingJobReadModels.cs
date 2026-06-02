@@ -142,6 +142,10 @@ public sealed record AdminPdfStampRecognitionResultSummary(
     IReadOnlyList<string> PageKeys,
     IReadOnlyList<string> ErrorExcerpts);
 
+public sealed record AdminPdfStampRecognitionPayload(
+    Guid PayloadId,
+    string PayloadJson);
+
 public sealed record AdminProcessorStatus(
     string ProcessorKey,
     string Capability,
@@ -203,4 +207,8 @@ public interface IAdminProcessingReadStore
         CancellationToken cancellationToken);
 
     Task<AdminResultDetails?> GetResultAsync(Guid resultIndexId, CancellationToken cancellationToken);
+
+    Task<AdminPdfStampRecognitionPayload?> GetPdfStampRecognitionPayloadAsync(
+        Guid payloadId,
+        CancellationToken cancellationToken);
 }

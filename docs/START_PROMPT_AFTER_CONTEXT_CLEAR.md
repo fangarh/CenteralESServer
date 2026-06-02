@@ -49,6 +49,7 @@ D:\Projects\DT1520\CenteralESServer
 - Admin Storage read-only реализован.
 - Admin Results read-only реализован.
 - Admin Result Details показывает безопасный PDF summary без raw JSON payload.
+- Admin Result Details имеет отдельный controlled `Debug JSON` download через `GET /api/admin/results/{resultIndexId}/payload`.
 - Admin Settings read-only реализован.
 - Admin Audit UI с фильтрами и safe details реализован.
 - SQL migration runner без EF реализован.
@@ -66,15 +67,15 @@ D:\Projects\DT1520\CenteralESServer
 - dotnet build CenteralESServer.sln --no-restore -maxcpucount:1 -v:minimal
   Результат: passed
 - dotnet test CenteralESServer.sln --no-build --no-restore -maxcpucount:1 -v:minimal
-  Результат: 50 unit + 51 integration passed
+  Результат: 50 unit + 54 integration passed
 - C:\Users\Admin\.dotnet\dotnet.exe отсутствует в текущем окружении; проверки выполнялись системным dotnet.
 
 Следующий логичный шаг без Docker:
-Raw JSON controlled debug endpoint.
+Admin UI polish для Result Details/Debug JSON или retention/cleanup planning без Docker.
 
 Зачем:
 - PDF summary уже закрыт безопасными счетчиками и excerpts;
-- если нужен raw JSON, это должен быть отдельный controlled/debug endpoint с явной границей доступа;
+- raw JSON отделен от обычного summary и доступен только через explicit debug download;
 - raw payload и входные PDF нельзя показывать в обычном Admin UI;
-- WinForms client теперь использует `GET /api/admin/services`, поэтому registry-долг для текущего MVP закрыт.
+- WinForms client использует `GET /api/admin/services`, поэтому registry-долг для текущего MVP закрыт.
 ```

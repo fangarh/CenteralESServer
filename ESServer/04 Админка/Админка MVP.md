@@ -348,6 +348,7 @@ date = today
 ```http
 GET /api/admin/results?capability=&hash=&jobId=&limit=
 GET /api/admin/results/{resultIndexId}
+GET /api/admin/results/{resultIndexId}/payload
 ```
 
 ```text
@@ -390,7 +391,18 @@ Raw JSON показывается отдельно и не должен быть
 - `izm_number`, если он есть;
 - короткие excerpts ошибок.
 
-Summary не возвращает полный raw JSON payload, входной PDF, storage key, password/hash или другие секреты. Полный raw JSON остаётся отдельной controlled/debug surface на будущее.
+Summary не возвращает полный raw JSON payload, входной PDF, storage key, password/hash или другие секреты.
+
+Полный raw JSON доступен только через отдельный controlled debug endpoint `GET /api/admin/results/{resultIndexId}/payload`:
+
+- требует admin session cookie;
+- read-only и не требует CSRF;
+- работает только для allowlist table `pdf_stamp_recognition_results`;
+- возвращает `422 unsupported_payload_table` для неподдержанных payload table;
+- возвращает `413 payload_too_large`, если payload больше `1 MiB`;
+- возвращает metadata (`resultIndexId`, `payloadTable`, `payloadId`, `contractVersion`, `payloadSize`), warning и поле `payload` с исходным JSON.
+
+В обычном Result Details raw JSON не встраивается. UI даёт отдельную кнопку `Debug JSON` для скачивания controlled debug payload.
 
 ## Экспорт отчёта для поддержки
 
