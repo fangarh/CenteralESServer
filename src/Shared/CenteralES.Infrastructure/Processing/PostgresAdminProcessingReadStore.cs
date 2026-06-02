@@ -273,6 +273,83 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
         return events;
     }
 
+    public async Task<IReadOnlyList<AdminResultReference>> ListResultsAsync(
+        AdminResultListQuery query,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var limit = Math.Clamp(query.Limit, 1, 200);
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("""
+            select
+                i.id,
+                i.subject_id,
+                i.job_id,
+                i.capability,
+                i.content_hash,
+                i.result_kind,
+                i.payload_table,
+                i.payload_id,
+                i.contract_version,
+                i.payload_size,
+                i.created_at,
+                j.status,
+                j.attempt_number
+            from processing_result_index i
+            left join processing_jobs j on j.id = i.job_id
+            where (@capability::text is null or i.capability = @capability)
+              and (@content_hash::text is null or i.content_hash = @content_hash)
+              and (@job_id::uuid is null or i.job_id = @job_id)
+            order by i.created_at desc
+            limit @limit;
+            """, connection);
+        command.Parameters.AddWithValue("capability", (object?)query.Capability ?? DBNull.Value);
+        command.Parameters.AddWithValue("content_hash", (object?)query.ContentHash ?? DBNull.Value);
+        command.Parameters.AddWithValue("job_id", (object?)query.JobId ?? DBNull.Value);
+        command.Parameters.AddWithValue("limit", limit);
+
+        var results = new List<AdminResultReference>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            results.Add(ReadResultReferenceRow(reader));
+        }
+
+        return results;
+    }
+
+    public async Task<AdminResultReference?> GetResultAsync(Guid resultIndexId, CancellationToken cancellationToken)
+    {
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand("""
+            select
+                i.id,
+                i.subject_id,
+                i.job_id,
+                i.capability,
+                i.content_hash,
+                i.result_kind,
+                i.payload_table,
+                i.payload_id,
+                i.contract_version,
+                i.payload_size,
+                i.created_at,
+                j.status,
+                j.attempt_number
+            from processing_result_index i
+            left join processing_jobs j on j.id = i.job_id
+            where i.id = @result_index_id;
+            """, connection);
+        command.Parameters.AddWithValue("result_index_id", resultIndexId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken)
+            ? ReadResultReferenceRow(reader)
+            : null;
+    }
+
     private static string ToProcessorHealth(IReadOnlyList<AdminProcessorWorkerStatus> workers)
     {
         if (workers.Count == 0)
@@ -281,6 +358,24 @@ public sealed class PostgresAdminProcessingReadStore : IAdminProcessingReadStore
         }
 
         return workers.Any(worker => !worker.Stale) ? "healthy" : "unhealthy";
+    }
+
+    private static AdminResultReference ReadResultReferenceRow(NpgsqlDataReader reader)
+    {
+        return new AdminResultReference(
+            reader.GetGuid(0),
+            reader.GetGuid(1),
+            reader.GetGuid(2),
+            reader.GetString(3),
+            reader.GetString(4),
+            reader.GetString(5),
+            reader.GetString(6),
+            reader.GetGuid(7),
+            reader.GetString(8),
+            reader.GetInt64(9),
+            reader.GetFieldValue<DateTimeOffset>(10),
+            reader.IsDBNull(11) ? null : ProcessingJobStatusMapper.Parse(reader.GetString(11)),
+            reader.IsDBNull(12) ? null : reader.GetInt32(12));
     }
 
     private static async Task<IReadOnlyList<AdminProcessorWorkerStatus>> ReadWorkersAsync(

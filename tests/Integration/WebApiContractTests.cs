@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using CenteralES.AccessControl;
+using CenteralES.Infrastructure.PdfStampRecognition;
 using CenteralES.Infrastructure.Postgres;
 using CenteralES.Infrastructure.Processing;
 using CenteralES.PdfStampRecognition;
@@ -76,7 +77,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-7");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-8");
 
         Assert.Contains("job-details-panel", html, StringComparison.Ordinal);
         Assert.Contains("support-report-button", html, StringComparison.Ordinal);
@@ -94,7 +95,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-7");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-8");
 
         Assert.Contains("processors-tab", html, StringComparison.Ordinal);
         Assert.Contains("processor-workers-body", html, StringComparison.Ordinal);
@@ -113,7 +114,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-7");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-8");
 
         Assert.Contains("health-tab", html, StringComparison.Ordinal);
         Assert.Contains("health-checks-body", html, StringComparison.Ordinal);
@@ -132,7 +133,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-7");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-8");
 
         Assert.Contains("delivery-tab", html, StringComparison.Ordinal);
         Assert.Contains("delivery-components-body", html, StringComparison.Ordinal);
@@ -151,13 +152,100 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         var client = _factory.CreateClient();
         var html = await client.GetStringAsync("/admin");
-        var js = await client.GetStringAsync("/admin/app.js?v=20260602-7");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-8");
 
         Assert.Contains("storage-tab", html, StringComparison.Ordinal);
         Assert.Contains("storage-summary-list", html, StringComparison.Ordinal);
         Assert.Contains("storage-capacity-list", html, StringComparison.Ordinal);
         Assert.Contains("renderStorageDetails", js, StringComparison.Ordinal);
         Assert.Contains("/api/admin/storage", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Admin_ui_contains_results_surface()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = _factory.CreateClient();
+        var html = await client.GetStringAsync("/admin");
+        var js = await client.GetStringAsync("/admin/app.js?v=20260602-8");
+
+        Assert.Contains("results-tab", html, StringComparison.Ordinal);
+        Assert.Contains("results-body", html, StringComparison.Ordinal);
+        Assert.Contains("result-details-panel", html, StringComparison.Ordinal);
+        Assert.Contains("renderResults", js, StringComparison.Ordinal);
+        Assert.Contains("/api/admin/results", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Admin_results_requires_admin_session()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var client = _factory.CreateClient();
+        var response = await client.GetAsync("/api/admin/results");
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("unauthorized", payload.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task Admin_results_list_returns_references_without_payload()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var completed = await CreateCompletedResultAsync();
+        var admin = await CreateAdminClientAsync(_factory);
+        var response = await admin.Client.GetAsync($"/api/admin/results?hash={Uri.EscapeDataString(completed.Hash)}");
+        var body = await response.Content.ReadAsStringAsync();
+        var payload = JsonSerializer.Deserialize<JsonElement>(body);
+        var results = payload.GetProperty("results").EnumerateArray().ToArray();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Single(results);
+        Assert.Equal(completed.ResultIndexId.ToString("N"), results[0].GetProperty("resultIndexId").GetString());
+        Assert.Equal(completed.JobId.ToString("N"), results[0].GetProperty("jobId").GetString());
+        Assert.Equal(completed.Hash, results[0].GetProperty("hash").GetString());
+        Assert.Equal("pdf-stamp-recognition", results[0].GetProperty("capability").GetString());
+        Assert.Equal("json", results[0].GetProperty("resultKind").GetString());
+        Assert.Equal("pdf_stamp_recognition_results", results[0].GetProperty("payloadTable").GetString());
+        Assert.True(results[0].GetProperty("payloadSize").GetInt64() > 0);
+        Assert.DoesNotContain("hidden payload", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("payloadJson", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Admin_result_details_returns_metadata_without_payload()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var completed = await CreateCompletedResultAsync();
+        var admin = await CreateAdminClientAsync(_factory);
+        var response = await admin.Client.GetAsync($"/api/admin/results/{completed.ResultIndexId:N}");
+        var body = await response.Content.ReadAsStringAsync();
+        var payload = JsonSerializer.Deserialize<JsonElement>(body);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(completed.ResultIndexId.ToString("N"), payload.GetProperty("resultIndexId").GetString());
+        Assert.Equal(completed.JobId.ToString("N"), payload.GetProperty("jobId").GetString());
+        Assert.Equal(completed.Hash, payload.GetProperty("hash").GetString());
+        Assert.Equal("test-v1", payload.GetProperty("contractVersion").GetString());
+        Assert.False(payload.TryGetProperty("result", out _));
+        Assert.DoesNotContain("hidden payload", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("payloadJson", body, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -1049,6 +1137,59 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         return new BlockedJobFixture(enqueued.JobId, hash);
     }
 
+    private static async Task<CompletedResultFixture> CreateCompletedResultAsync()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString()
+            ?? throw new InvalidOperationException("Test database is not configured.");
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var now = DateTimeOffset.UtcNow;
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var resultStore = new PostgresPdfStampRecognitionResultStore(dataSource);
+        var hash = $"sha256:{Guid.NewGuid():N}";
+        var enqueued = await queue.EnqueueAsync(
+            new CreateProcessingJobCommand(
+                PdfStampRecognitionConstants.Capability,
+                hash,
+                $"temp/{Guid.NewGuid():N}.pdf",
+                now),
+            CancellationToken.None);
+        var claimed = await queue.ClaimNextAsync(now.AddSeconds(1), CancellationToken.None)
+            ?? throw new InvalidOperationException("Expected test job to be claimable.");
+
+        var saved = await resultStore.SaveAsync(
+            new SavePdfStampRecognitionResultCommand(
+                claimed.SubjectId,
+                claimed.JobId,
+                claimed.ContentHash,
+                """{"source":"admin-results-test","people":[{"name":"hidden payload"}]}""",
+                "test-v1",
+                now.AddSeconds(2)),
+            CancellationToken.None);
+
+        await queue.CompleteAsync(
+            new CompleteProcessingJobCommand(
+                claimed.JobId,
+                claimed.SubjectId,
+                saved.ResultIndexId,
+                new AttemptDiagnostics(
+                    Endpoint: "fake://test",
+                    Duration: TimeSpan.FromMilliseconds(10),
+                    HttpStatus: 200,
+                    NormalizedError: null,
+                    Retryable: null,
+                    CorrelationId: $"corr-{Guid.NewGuid():N}"),
+                now.AddSeconds(3)),
+            CancellationToken.None);
+
+        return new CompletedResultFixture(saved.ResultIndexId, enqueued.JobId, hash);
+    }
+
     private static async Task ResetProcessingTablesAsync(NpgsqlDataSource dataSource, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -1069,4 +1210,6 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     private sealed record AdminTestSession(HttpClient Client, string Login, string CsrfToken);
 
     private sealed record BlockedJobFixture(Guid JobId, string Hash);
+
+    private sealed record CompletedResultFixture(Guid ResultIndexId, Guid JobId, string Hash);
 }

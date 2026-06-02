@@ -329,6 +329,19 @@ date = today
 - показать metadata;
 - дать скачать artifact, если это разрешено.
 
+Текущий backend/UI checkpoint:
+
+```http
+GET /api/admin/results?capability=&hash=&jobId=&limit=
+GET /api/admin/results/{resultIndexId}
+```
+
+```text
+/admin -> Results
+```
+
+Первый экран `Results` показывает read-only result index metadata: resultIndexId, subjectId, jobId, capability, hash, result kind, payload table/id, contract version, payload size, createdAt и связанный job status/attempt. Endpoint-ы требуют admin session cookie, не требуют CSRF, не возвращают raw JSON payload, входной PDF или storage key. Человекочитаемый summary результата и раскрытие raw JSON остаются отдельным checkpoint после фиксации стабильного JSON-контракта.
+
 ## Result Details
 
 Страница результата должна показывать:

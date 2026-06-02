@@ -55,6 +55,7 @@ app.MapAdminJobEndpoints();
 app.MapAdminProcessorEndpoints();
 app.MapAdminAuditEndpoints();
 app.MapAdminStorageEndpoints();
+app.MapAdminResultEndpoints();
 app.MapAdminApiKeyEndpoints();
 app.MapAdminUserEndpoints();
 

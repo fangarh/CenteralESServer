@@ -178,6 +178,24 @@ internal static class ApiMappings
             audit.CorrelationId);
     }
 
+    public static AdminResultResponse ToAdminResultResponse(AdminResultReference result)
+    {
+        return new AdminResultResponse(
+            result.ResultIndexId.ToString("N"),
+            result.SubjectId.ToString("N"),
+            result.JobId.ToString("N"),
+            result.Capability,
+            result.ContentHash,
+            result.ResultKind,
+            result.PayloadTable,
+            result.PayloadId.ToString("N"),
+            result.ContractVersion,
+            result.PayloadSize,
+            result.CreatedAt,
+            result.JobStatus is null ? null : ToPublicStatus(result.JobStatus.Value),
+            result.JobAttemptNumber);
+    }
+
     public static AdminApiKeyResponse ToAdminApiKeyResponse(AdminApiKeyListItem key)
     {
         return new AdminApiKeyResponse(

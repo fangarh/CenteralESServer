@@ -217,6 +217,23 @@ internal sealed record AdminTemporaryStorageResponse(
     long? AvailableFreeBytes,
     long? MinimumFreeBytes);
 
+internal sealed record AdminResultListResponse(IReadOnlyList<AdminResultResponse> Results);
+
+internal sealed record AdminResultResponse(
+    string ResultIndexId,
+    string SubjectId,
+    string JobId,
+    string Capability,
+    string Hash,
+    string ResultKind,
+    string PayloadTable,
+    string PayloadId,
+    string ContractVersion,
+    long PayloadSize,
+    DateTimeOffset CreatedAt,
+    string? JobStatus,
+    int? JobAttemptNumber);
+
 internal sealed record AdminApiKeyListResponse(IReadOnlyList<AdminApiKeyResponse> Keys);
 
 internal sealed record AdminApiKeyResponse(

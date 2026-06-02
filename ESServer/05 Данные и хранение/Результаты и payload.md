@@ -136,6 +136,15 @@ store_json_summary_plus_artifact
 
 Для первого релиза это не входит в обязательный scope.
 
+Текущий admin checkpoint:
+
+```http
+GET /api/admin/results?capability=&hash=&jobId=&limit=
+GET /api/admin/results/{resultIndexId}
+```
+
+Admin Results возвращает только lightweight metadata из `processing_result_index` и связанную job metadata. Raw `payload_json` не возвращается в списке и деталях результата, чтобы не тащить большие payload и не раскрывать лишние данные в операционном UI.
+
 Для будущего обработчика изображений:
 
 ```text

@@ -2,6 +2,7 @@ const state = {
   csrfToken: sessionStorage.getItem("centerales.csrfToken") || "",
   admin: null,
   jobs: [],
+  results: [],
   apiKeys: [],
   users: [],
   audit: [],
@@ -10,6 +11,7 @@ const state = {
   storage: null,
   selectedJobDetails: null,
   selectedSupportReport: null,
+  selectedResult: null,
   activeTab: "overview"
 };
 
@@ -17,6 +19,7 @@ const titles = {
   overview: ["Сводка", "Состояние очереди, обработчика и действий, которые требуют внимания."],
   delivery: ["Поставка", "Состав MVP-установки и локальный запуск без Docker."],
   jobs: ["Задачи", "Упавшие задачи и ручной retry."],
+  results: ["Results", "Поиск и просмотр сохраненных результатов без raw payload в списке."],
   processors: ["Обработчик", "Пассивное состояние PDF-обработчика, очередь, workers и diagnostics."],
   health: ["Проверки", "Локальные readiness checks без внешнего pdf2txt-вызова."],
   storage: ["Storage", "Временное хранилище, лимиты и риск блокировки новых upload-ов."],
@@ -125,6 +128,7 @@ function bindSessionActions() {
   });
   document.getElementById("support-report-button").addEventListener("click", downloadSupportReport);
   document.getElementById("close-job-details-button").addEventListener("click", clearJobDetails);
+  document.getElementById("close-result-details-button").addEventListener("click", clearResultDetails);
 }
 
 async function restoreSession() {
@@ -175,6 +179,7 @@ async function refreshData() {
   try {
     await Promise.all([
       loadJobs(),
+      loadResults(),
       loadProcessor(),
       loadHealth(),
       loadStorage(),
@@ -200,6 +205,11 @@ async function loadJobs() {
     apiGet("/api/admin/jobs?status=blocked&limit=50")
   ]);
   state.jobs = [...(failed.jobs || []), ...(blocked.jobs || [])];
+}
+
+async function loadResults() {
+  const response = await apiGet("/api/admin/results?limit=50");
+  state.results = response.results || [];
 }
 
 async function loadProcessor() {
@@ -236,10 +246,12 @@ async function loadStorage() {
 function renderAll() {
   renderOverview();
   renderJobs();
+  renderResults();
   renderApiKeys();
   renderUsers();
   renderAudit();
   renderJobDetails();
+  renderResultDetails();
   renderProcessorDetails();
   renderHealthDetails();
   renderDeliveryDetails();
@@ -305,6 +317,35 @@ function renderJobs() {
     button.style.marginLeft = "8px";
     button.addEventListener("click", () => retryJob(job));
     row.lastElementChild.appendChild(button);
+    body.appendChild(row);
+  });
+}
+
+function renderResults() {
+  const body = document.getElementById("results-body");
+  body.innerHTML = "";
+  if (state.results.length === 0) {
+    appendEmptyRow(body, 7, "Сохраненные результаты еще не найдены.");
+    return;
+  }
+
+  state.results.forEach(result => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td><span class="mono">${escapeHtml(shortId(result.resultIndexId))}</span></td>
+      <td>${escapeHtml(result.capability)}</td>
+      <td><span class="mono">${escapeHtml(result.hash)}</span></td>
+      <td>${escapeHtml(result.resultKind)}<br><span class="mono">${escapeHtml(result.contractVersion)}</span></td>
+      <td>${formatBytes(result.payloadSize)}</td>
+      <td>${formatDate(result.createdAt)}</td>
+      <td></td>
+    `;
+    const openButton = document.createElement("button");
+    openButton.className = "secondary-button";
+    openButton.type = "button";
+    openButton.textContent = "Детали";
+    openButton.addEventListener("click", () => loadResultDetails(result.resultIndexId));
+    row.lastElementChild.appendChild(openButton);
     body.appendChild(row);
   });
 }
@@ -574,6 +615,16 @@ async function loadJobDetails(jobId) {
   }
 }
 
+async function loadResultDetails(resultIndexId) {
+  try {
+    state.selectedResult = await apiGet(`/api/admin/results/${encodeURIComponent(resultIndexId)}`);
+    renderResultDetails();
+    showAlert("Детали результата загружены.");
+  } catch (error) {
+    showAlert(error.message || "Не удалось загрузить детали результата.", true);
+  }
+}
+
 function renderJobDetails() {
   const panel = document.getElementById("job-details-panel");
   const job = state.selectedJobDetails;
@@ -655,6 +706,38 @@ function renderAttempts(attempts) {
     `;
     body.appendChild(row);
   });
+}
+
+function renderResultDetails() {
+  const panel = document.getElementById("result-details-panel");
+  const result = state.selectedResult;
+  panel.hidden = !result;
+  if (!result) {
+    return;
+  }
+
+  setText("result-details-title", `Результат ${shortId(result.resultIndexId)}`);
+  setText("result-details-subtitle", `${result.capability}: ${result.hash}`);
+  renderDefinitionList("result-details-meta", [
+    ["Result index", result.resultIndexId],
+    ["Subject", result.subjectId],
+    ["Job", result.jobId],
+    ["Capability", result.capability],
+    ["Hash", result.hash],
+    ["Kind", result.resultKind],
+    ["Payload table", result.payloadTable],
+    ["Payload id", result.payloadId],
+    ["Contract", result.contractVersion],
+    ["Payload size", formatBytes(result.payloadSize)],
+    ["Created", formatDate(result.createdAt)],
+    ["Job status", translateStatus(result.jobStatus)],
+    ["Attempt", result.jobAttemptNumber ?? "Нет данных"]
+  ]);
+}
+
+function clearResultDetails() {
+  state.selectedResult = null;
+  renderResultDetails();
 }
 
 function clearJobDetails() {

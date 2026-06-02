@@ -107,6 +107,27 @@ public sealed record AdminJobSupportReportAuditEvent(
     string? Comment,
     string CorrelationId);
 
+public sealed record AdminResultListQuery(
+    string? Capability,
+    string? ContentHash,
+    Guid? JobId,
+    int Limit);
+
+public sealed record AdminResultReference(
+    Guid ResultIndexId,
+    Guid SubjectId,
+    Guid JobId,
+    string Capability,
+    string ContentHash,
+    string ResultKind,
+    string PayloadTable,
+    Guid PayloadId,
+    string ContractVersion,
+    long PayloadSize,
+    DateTimeOffset CreatedAt,
+    ProcessingJobStatus? JobStatus,
+    int? JobAttemptNumber);
+
 public sealed record AdminProcessorStatus(
     string ProcessorKey,
     string Capability,
@@ -162,4 +183,10 @@ public interface IAdminProcessingReadStore
     Task<IReadOnlyList<AdminAuditEventListItem>> ListAuditEventsAsync(
         AdminAuditEventListQuery query,
         CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<AdminResultReference>> ListResultsAsync(
+        AdminResultListQuery query,
+        CancellationToken cancellationToken);
+
+    Task<AdminResultReference?> GetResultAsync(Guid resultIndexId, CancellationToken cancellationToken);
 }

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Centeral ES Admin</title>
-  <link rel="stylesheet" href="/admin/app.css?v=20260602-7">
+  <link rel="stylesheet" href="/admin/app.css?v=20260602-8">
 </head>
 <body>
   <div class="app-shell">
@@ -20,6 +20,7 @@
         <button class="nav-item is-active" type="button" data-tab="overview">Сводка</button>
         <button class="nav-item" type="button" data-tab="delivery">Поставка</button>
         <button class="nav-item" type="button" data-tab="jobs">Задачи</button>
+        <button class="nav-item" type="button" data-tab="results">Results</button>
         <button class="nav-item" type="button" data-tab="processors">Обработчик</button>
         <button class="nav-item" type="button" data-tab="health">Проверки</button>
         <button class="nav-item" type="button" data-tab="storage">Storage</button>
@@ -196,6 +197,54 @@
                     </thead>
                     <tbody id="job-attempts-body"></tbody>
                   </table>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="results-tab" class="tab-panel" hidden>
+          <div class="section-band">
+            <div class="section-header">
+              <div>
+                <h2>Results</h2>
+                <p>Сохраненные result references без raw JSON payload и входных PDF.</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Result</th>
+                    <th>Capability</th>
+                    <th>Hash</th>
+                    <th>Kind</th>
+                    <th>Size</th>
+                    <th>Created</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="results-body"></tbody>
+              </table>
+            </div>
+            <section id="result-details-panel" class="details-panel" hidden>
+              <div class="section-header">
+                <div>
+                  <h2 id="result-details-title">Детали результата</h2>
+                  <p id="result-details-subtitle">Metadata результата и ссылка на связанную job.</p>
+                </div>
+                <button id="close-result-details-button" class="secondary-button" type="button">Закрыть</button>
+              </div>
+              <div class="detail-block">
+                <h3>Metadata</h3>
+                <dl id="result-details-meta" class="kv-list"></dl>
+              </div>
+              <div class="detail-block">
+                <h3>Граница MVP</h3>
+                <div class="report-summary">
+                  <div>Этот экран не возвращает raw JSON payload и не показывает входной PDF.</div>
+                  <div>Payload table и payload id нужны для поддержки и диагностики, но не являются ссылкой для скачивания.</div>
+                  <div>Человекочитаемый summary результата будет отдельным checkpoint после фиксации стабильного JSON-контракта.</div>
                 </div>
               </div>
             </section>
@@ -514,6 +563,6 @@
     </form>
   </dialog>
 
-  <script src="/admin/app.js?v=20260602-7"></script>
+  <script src="/admin/app.js?v=20260602-8"></script>
 </body>
 </html>
