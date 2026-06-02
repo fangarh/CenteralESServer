@@ -205,7 +205,9 @@ internal sealed record AdminAuditEventResponse(
     string? Comment,
     string CorrelationId);
 
-internal sealed record AdminStorageResponse(AdminTemporaryStorageResponse Temporary);
+internal sealed record AdminStorageResponse(
+    AdminTemporaryStorageResponse Temporary,
+    AdminRetentionPolicyResponse Retention);
 
 internal sealed record AdminTemporaryStorageResponse(
     string Provider,
@@ -222,6 +224,7 @@ internal sealed record AdminSettingsResponse(
     AdminPublicApiSettingsResponse PublicApi,
     AdminStorageSettingsResponse Storage,
     AdminProcessorSettingsResponse Processor,
+    AdminRetentionPolicyResponse Retention,
     AdminSettingsBoundaryResponse Boundary);
 
 internal sealed record AdminPublicApiSettingsResponse(long MaxUploadBytes);
@@ -249,6 +252,20 @@ internal sealed record AdminSettingsBoundaryResponse(
     bool ReadOnly,
     bool EditingEnabled,
     string Note);
+
+internal sealed record AdminRetentionPolicyResponse(
+    bool ActiveCleanupEnabled,
+    bool DryRunAvailable,
+    string Boundary,
+    IReadOnlyList<AdminRetentionRuleResponse> Rules);
+
+internal sealed record AdminRetentionRuleResponse(
+    string Target,
+    string CurrentBehavior,
+    string RetentionWindow,
+    string CleanupTrigger,
+    bool AutomaticCleanupEnabled,
+    string Notes);
 
 internal sealed record AdminServiceRegistryResponse(IReadOnlyList<AdminRegisteredServiceResponse> Services);
 

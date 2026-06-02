@@ -59,6 +59,7 @@
 - [x] **ADMIN-07**: WinForms test client получает текущий MVP service list через Admin Services registry API и запускает безопасные health/processor/Public API проверки.
 - [x] **ADMIN-08**: Admin API предоставляет read-only registry зарегистрированных MVP-сервисов без секретов, connection strings и активного вызова внешних processor-ов.
 - [x] **ADMIN-09**: Admin Result Details имеет отдельный controlled debug endpoint/download для raw JSON payload с auth, table allowlist и size limit.
+- [x] **ADMIN-10**: Admin Storage/Settings показывают read-only retention policy MVP без запуска cleanup, dry-run или ручного удаления.
 - [x] **HEALTH-01**: Web предоставляет `/health/live` и `/health/ready`.
 - [x] **HEALTH-02**: Worker пишет heartbeat каждые `30 seconds`, stale threshold `3 minutes`.
 
@@ -124,16 +125,17 @@
 | ADMIN-07 | Phase 2 | Done: WinForms test client discovers current MVP service from `GET /api/admin/services` and tests health, passive processor status, and optional Public PDF upload/polling |
 | ADMIN-08 | Phase 2 | Done: `GET /api/admin/services` returns safe registered service metadata for `pdf-stamp-recognition / pdf2txt-http-recognizer` |
 | ADMIN-09 | Phase 4 | Done: `GET /api/admin/results/{resultIndexId}/payload` exposes controlled raw JSON debug payload for supported PDF results only |
+| ADMIN-10 | Phase 4 | Done: `/api/admin/storage`, `/api/admin/settings`, and Admin UI expose read-only retention policy visibility |
 | HEALTH-01 | Phase 2 | Done: Web endpoints plus Admin UI Health screen |
 | HEALTH-02 | Phase 2 | Done |
 | DEPLOY-01 | Phase 3 | Pending |
 | DEPLOY-02 | Phase 3 | Pending |
 
 **Coverage:**
-- v1 requirements: 38 total
-- Mapped to phases: 38
+- v1 requirements: 39 total
+- Mapped to phases: 39
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-02 after controlled result payload debug endpoint*
+*Last updated: 2026-06-02 after retention policy visibility*

@@ -768,6 +768,17 @@ GET /api/admin/services
 
 `Settings` показывает только безопасную read-only сводку runtime-настроек: лимит загрузки Public API, temporary storage root/limits, параметры `pdf2txt-http-recognizer`, sanitized endpoint pool, concurrency limits, timeout, retry attempts, overloaded delay и contract version. Экран не возвращает credentials, connection strings, env var names, пароли, hash-значения и не выполняет редактирование. Изменение настроек остается отдельным checkpoint с audit, подтверждением и валидацией влияния на новые задачи.
 
+Settings и Storage также показывают read-only retention policy MVP:
+
+- active cleanup выключен;
+- dry-run cleanup пока недоступен;
+- completed temporary input удаляется Worker lifecycle cleanup-ом;
+- failed/blocked temporary input сохраняется для manual retry;
+- result JSON payload и admin audit events хранятся бессрочно в текущем MVP;
+- orphan temporary input пока не удаляется автоматически, будущий путь — dry-run после grace window и отдельное audited cleanup action.
+
+Эта видимость не добавляет cleanup worker, ручную кнопку удаления или редактирование retention.
+
 ## Admin Users
 
 `Admin Users` входит в MVP.

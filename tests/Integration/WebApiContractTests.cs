@@ -157,7 +157,9 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         Assert.Contains("storage-tab", html, StringComparison.Ordinal);
         Assert.Contains("storage-summary-list", html, StringComparison.Ordinal);
         Assert.Contains("storage-capacity-list", html, StringComparison.Ordinal);
+        Assert.Contains("storage-retention-list", html, StringComparison.Ordinal);
         Assert.Contains("renderStorageDetails", js, StringComparison.Ordinal);
+        Assert.Contains("renderRetentionPolicy", js, StringComparison.Ordinal);
         Assert.Contains("/api/admin/storage", js, StringComparison.Ordinal);
     }
 
@@ -197,7 +199,9 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         Assert.Contains("settings-tab", html, StringComparison.Ordinal);
         Assert.Contains("settings-summary-list", html, StringComparison.Ordinal);
         Assert.Contains("settings-processor-list", html, StringComparison.Ordinal);
+        Assert.Contains("settings-retention-list", html, StringComparison.Ordinal);
         Assert.Contains("renderSettingsDetails", js, StringComparison.Ordinal);
+        Assert.Contains("renderRetentionPolicy", js, StringComparison.Ordinal);
         Assert.Contains("/api/admin/settings", js, StringComparison.Ordinal);
     }
 
@@ -259,6 +263,12 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         Assert.True(payload.GetProperty("processor").TryGetProperty("endpointCount", out _));
         Assert.True(payload.GetProperty("processor").TryGetProperty("maxAttempts", out _));
         Assert.True(payload.GetProperty("processor").TryGetProperty("processorOverloadedDelay", out _));
+        var retention = payload.GetProperty("retention");
+        Assert.False(retention.GetProperty("activeCleanupEnabled").GetBoolean());
+        Assert.False(retention.GetProperty("dryRunAvailable").GetBoolean());
+        Assert.Contains(
+            retention.GetProperty("rules").EnumerateArray(),
+            rule => rule.GetProperty("target").GetString() == "temporary-input-failed-blocked");
         Assert.DoesNotContain("password", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("secret", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("connectionString", body, StringComparison.OrdinalIgnoreCase);
@@ -481,6 +491,11 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         Assert.True(temporary.TryGetProperty("softLimitBytes", out _));
         Assert.True(temporary.TryGetProperty("minimumFreeBytes", out _));
         Assert.True(temporary.TryGetProperty("availableFreeBytes", out _));
+        var retention = payload.GetProperty("retention");
+        Assert.False(retention.GetProperty("activeCleanupEnabled").GetBoolean());
+        Assert.Contains(
+            retention.GetProperty("rules").EnumerateArray(),
+            rule => rule.GetProperty("target").GetString() == "result-json-payload");
     }
 
     [Fact]

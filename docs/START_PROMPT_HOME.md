@@ -63,6 +63,7 @@ db.env, logon.env, .codex-local/ и test.pdf должны оставаться i
 - Admin Result Details показывает безопасный PDF summary без raw JSON payload.
 - Admin Result Details имеет отдельный controlled `Debug JSON` download через `GET /api/admin/results/{resultIndexId}/payload`.
 - Admin Settings read-only реализован.
+- Admin Storage/Settings показывают read-only retention policy MVP без cleanup-действий.
 - Admin Audit UI с фильтрами и safe details реализован.
 - SQL migration runner без EF реализован.
 - Отдельное тестовое WinForms-приложение для создания первого admin реализовано:
@@ -97,11 +98,12 @@ db.env, logon.env, .codex-local/ и test.pdf должны оставаться i
 - C:\Users\Admin\.dotnet\dotnet.exe отсутствует в текущем окружении; проверки выполнялись системным dotnet.
 
 Следующий логичный шаг без Docker:
-Admin UI polish для Result Details/Debug JSON или retention/cleanup planning без Docker.
+Admin UI polish для Result Details/Debug JSON или cleanup dry-run planning без Docker.
 
 Зачем:
 - PDF summary уже закрыт безопасными счетчиками и excerpts;
 - raw JSON отделен от обычного summary и доступен только через explicit debug download;
+- retention policy видна read-only в Storage/Settings, но cleanup worker и ручное удаление не включены;
 - WinForms client использует `GET /api/admin/services`, поэтому registry-долг для текущего MVP закрыт.
 
 После этого следующий крупный блок:

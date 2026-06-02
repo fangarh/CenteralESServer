@@ -44,7 +44,7 @@ Scope:
 - manual retry одной задачи; backend endpoint implemented, UI remains Phase 4;
 - audit для admin actions; current MVP dangerous actions and filtered Audit UI implemented;
 - health live/ready и Worker heartbeat; baseline already implemented in Phase 1, remaining work is hardening/admin visibility;
-- temporary storage hard/soft limit behavior; backend hard-limit block implemented, Admin UI warning remains Phase 4;
+- temporary storage hard/soft limit behavior; backend hard-limit block implemented, Admin UI warning and read-only retention visibility implemented;
 - blocked/final failure handling;
 - support report MVP; backend endpoint implemented, UI/export button remains Phase 4.
 
@@ -71,7 +71,7 @@ Scope:
 - Processors/Processor Details;
 - Results/Result Details read-only baseline, safe PDF summary, and controlled raw JSON debug download done;
 - API Keys UI;
-- Storage screen read-only baseline done; cleanup/retention actions remain later;
+- Storage screen read-only baseline and retention policy visibility done; cleanup/dry-run/delete actions remain later;
 - Health screen;
 - Audit screen baseline done with filters and safe details;
 - Admin Users;
@@ -96,4 +96,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-02 after controlled result payload debug endpoint*
+*Last updated: 2026-06-02 after retention policy visibility*

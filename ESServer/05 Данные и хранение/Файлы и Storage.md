@@ -130,9 +130,9 @@ Cleanup temporary input files:
 
 ```text
 completed -> удалить input file
-blocked/final failed -> удалить input file
+blocked/final failed -> сохранить input file для manual retry
 cancelled -> удалить input file
-abandoned -> удалить после grace period
+abandoned -> future dry-run candidate после grace period
 ```
 
 Default grace period для abandoned:
@@ -140,6 +140,26 @@ Default grace period для abandoned:
 ```text
 24 hours
 ```
+
+## Retention policy MVP
+
+Текущий checkpoint фиксирует read-only retention policy без активного фонового удаления:
+
+- `temporary-input-active`: временный PDF хранится, пока job находится в `queued` или `processing`.
+- `temporary-input-completed`: временный PDF удаляется Worker-ом после успешного `completed`, когда состояние и result index уже сохранены.
+- `temporary-input-failed-blocked`: временный PDF сохраняется после `failed`/`blocked`, чтобы manual retry мог переиспользовать input.
+- `result-json-payload`: JSON payload результата хранится бессрочно в текущем MVP как cache и diagnostic source.
+- `admin-audit-events`: audit events append-only и хранятся бессрочно в текущем MVP.
+- `orphan-temporary-input`: активного sweep-а нет; будущий safe-путь — сначала dry-run кандидатов после grace window `24 hours`, затем отдельное audited cleanup action.
+
+`GET /api/admin/storage` и `GET /api/admin/settings` показывают эту политику как read-only metadata:
+
+- `activeCleanupEnabled = false`;
+- `dryRunAvailable = false`;
+- правила retention;
+- явную границу MVP.
+
+Этот checkpoint не добавляет удаление файлов, удаление payload, cleanup worker, ручную кнопку cleanup или редактирование retention. Такие действия требуют отдельного backend/UI checkpoint с confirmation, audit и проверкой влияния на manual retry.
 
 ## S3-compatible storage
 

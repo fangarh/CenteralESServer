@@ -676,6 +676,9 @@ function renderStorageDetails() {
       ["Minimum free", "Нет данных"],
       ["Free on volume", "Нет данных"]
     ]);
+    renderDefinitionList("storage-retention-list", [
+      ["Retention", "Нет данных"]
+    ]);
     setText("storage-status", "Нет данных");
     setText("storage-used", "0 B");
     setText("storage-risk", "Storage еще не загружен.");
@@ -700,6 +703,7 @@ function renderStorageDetails() {
     ["Minimum free", formatBytes(temporary.minimumFreeBytes)],
     ["Free on volume", formatBytes(temporary.availableFreeBytes)]
   ]);
+  renderRetentionPolicy("storage-retention-list", state.storage?.retention);
 }
 
 function renderSettingsDetails() {
@@ -713,6 +717,9 @@ function renderSettingsDetails() {
       ["Soft limit", "Нет данных"],
       ["Hard limit", "Нет данных"],
       ["Minimum free", "Нет данных"]
+    ]);
+    renderDefinitionList("settings-retention-list", [
+      ["Retention", "Нет данных"]
     ]);
     renderDefinitionList("settings-processor-list", [
       ["Processor key", "Нет данных"],
@@ -752,6 +759,8 @@ function renderSettingsDetails() {
     ["Minimum free", formatBytes(storage.temporaryMinimumFreeBytes)]
   ]);
 
+  renderRetentionPolicy("settings-retention-list", settings.retention);
+
   renderDefinitionList("settings-processor-list", [
     ["Processor key", processor.processorKey],
     ["Capability", processor.capability],
@@ -772,6 +781,23 @@ function renderSettingsDetails() {
   ]);
 
   renderEndpointPool(processor.endpointPool || []);
+}
+
+function renderRetentionPolicy(targetId, retention) {
+  if (!retention) {
+    renderDefinitionList(targetId, [
+      ["Retention", "Нет данных"]
+    ]);
+    return;
+  }
+
+  const rules = retention.rules || [];
+  renderDefinitionList(targetId, [
+    ["Active cleanup", retention.activeCleanupEnabled ? "Включен" : "Выключен"],
+    ["Dry-run", retention.dryRunAvailable ? "Доступен" : "Недоступен"],
+    ["Boundary", retention.boundary],
+    ["Rules", rules.map(rule => `${rule.target}: ${rule.retentionWindow}`).join("; ") || "Нет правил"]
+  ]);
 }
 
 function renderEndpointPool(endpoints) {

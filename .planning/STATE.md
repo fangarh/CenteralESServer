@@ -106,6 +106,7 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - 2026-06-02: WinForms test client expanded beyond first-admin bootstrap: the new MVP Services tab logs into Admin API, discovers the current MVP service, tests `/health/live`, `/health/ready`, passive processor status, and can optionally run Public PDF upload/polling when an API key and PDF are provided.
 - 2026-06-02: Admin Services read-only registry API added through `GET /api/admin/services`; it returns the registered MVP service metadata for `pdf-stamp-recognition / pdf2txt-http-recognizer`, public/admin endpoint paths, test capability flags, and passive status source without secrets or connection strings. WinForms test client now discovers services from this registry instead of `GET /api/admin/settings`.
 - 2026-06-02: Controlled raw JSON debug endpoint added through `GET /api/admin/results/{resultIndexId}/payload`; it is read-only, admin-session protected, limited to `pdf_stamp_recognition_results`, rejects unsupported payload tables with `422`, rejects payloads over `1 MiB` with `413`, and is exposed in Admin Result Details as a separate `Debug JSON` download action.
+- 2026-06-02: Read-only MVP retention policy visibility added to `GET /api/admin/storage`, `GET /api/admin/settings`, and Admin UI Storage/Settings. It documents current behavior without enabling cleanup: completed temporary input is worker-cleaned, failed/blocked input is retained for manual retry, result JSON payload and audit events are retained indefinitely, orphan cleanup remains future dry-run/audited work.
 
 ## Workflow Rules
 
@@ -115,4 +116,4 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-06-02 after controlled result payload debug endpoint*
+*Last updated: 2026-06-02 after retention policy visibility*

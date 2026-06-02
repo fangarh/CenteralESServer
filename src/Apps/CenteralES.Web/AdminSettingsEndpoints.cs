@@ -52,6 +52,7 @@ internal static class AdminSettingsEndpoints
                     ResolvePositiveInt(processorSection["maxAttempts"], 5),
                     ResolveTimeSpan(processorSection["processorOverloadedDelay"], TimeSpan.FromSeconds(15)).ToString("c"),
                     ResolveString(processorSection["contractVersion"], DefaultHttpOptions.ContractVersion)),
+                AdminRetentionPolicyCatalog.Create(),
                 new AdminSettingsBoundaryResponse(
                     ReadOnly: true,
                     EditingEnabled: false,

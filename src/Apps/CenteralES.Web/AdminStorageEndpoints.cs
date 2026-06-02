@@ -36,7 +36,8 @@ internal static class AdminStorageEndpoints
                     capacity.HardLimitBytes,
                     capacity.SoftLimitBytes,
                     capacity.AvailableFreeBytes,
-                    capacity.MinimumFreeBytes)));
+                    capacity.MinimumFreeBytes),
+                AdminRetentionPolicyCatalog.Create()));
         })
             .WithName("AdminGetStorage");
     }
