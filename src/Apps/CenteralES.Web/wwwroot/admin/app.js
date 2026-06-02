@@ -1,3 +1,28 @@
+const {
+  statusPill,
+  queueSummary,
+  translateStatus,
+  translateHealth,
+  translateAction,
+  shortId,
+  formatDate,
+  formatDuration,
+  formatBool,
+  formatBytes,
+  pluralizeRu,
+  escapeHtml
+} = window.CenteralESAdminFormatters;
+
+const {
+  showAlert,
+  showCreatedSecret,
+  workItem,
+  appendEmptyRow,
+  detailBlock,
+  renderDefinitionList,
+  setText
+} = window.CenteralESAdminDom;
+
 const state = {
   csrfToken: sessionStorage.getItem("centerales.csrfToken") || "",
   admin: null,
@@ -24,6 +49,20 @@ const state = {
   selectedResult: null,
   activeTab: "overview"
 };
+
+const {
+  apiGet,
+  apiPost,
+  fetchJson,
+  fetchHealthJson
+} = window.CenteralESAdminHttp.createAdminApiClient({
+  getCsrfToken: () => state.csrfToken,
+  onUnauthorized: () => {
+    state.admin = null;
+  }
+});
+
+const confirmAction = window.CenteralESAdminDialog.createConfirmAction({ showAlert });
 
 const titles = {
   overview: ["Сводка", "Состояние очереди, обработчика и действий, которые требуют внимания."],
@@ -1175,41 +1214,6 @@ async function changeUserPassword(user) {
   renderAll();
 }
 
-function confirmAction(title, message, requireComment) {
-  const dialog = document.getElementById("confirm-dialog");
-  const titleEl = document.getElementById("confirm-title");
-  const messageEl = document.getElementById("confirm-message");
-  const commentEl = document.getElementById("confirm-comment");
-  const labelEl = document.getElementById("confirm-comment-label");
-  const okButton = document.getElementById("confirm-ok");
-
-  titleEl.textContent = title;
-  messageEl.textContent = message;
-  commentEl.value = "";
-  commentEl.required = requireComment;
-  labelEl.firstChild.textContent = requireComment ? "Комментарий обязателен" : "Комментарий";
-  okButton.textContent = title;
-
-  return new Promise(resolve => {
-    const closeHandler = () => {
-      dialog.removeEventListener("close", closeHandler);
-      if (dialog.returnValue !== "ok") {
-        resolve(null);
-        return;
-      }
-      const comment = commentEl.value.trim();
-      if (requireComment && !comment) {
-        showAlert("Для этого действия нужен комментарий.", true);
-        resolve(null);
-        return;
-      }
-      resolve(comment);
-    };
-    dialog.addEventListener("close", closeHandler);
-    dialog.showModal();
-  });
-}
-
 function activateTab(tab) {
   state.activeTab = tab;
   document.querySelectorAll(".nav-item").forEach(button => {
@@ -1228,239 +1232,4 @@ function setAuthenticated(isAuthenticated) {
   document.getElementById("admin-content").hidden = !isAuthenticated;
   document.getElementById("logout-button").hidden = !isAuthenticated;
   setText("session-login", isAuthenticated ? state.admin.login : "Не выполнен вход");
-}
-
-async function apiGet(url, requireAuth = true) {
-  return fetchJson(url, { method: "GET" }, requireAuth);
-}
-
-async function apiPost(url, body) {
-  return fetchJson(url, {
-    method: "POST",
-    headers: { "X-CSRF-Token": state.csrfToken },
-    body: JSON.stringify(body)
-  });
-}
-
-async function fetchJson(url, options = {}, requireAuth = true) {
-  const response = await fetch(url, {
-    credentials: "same-origin",
-    headers: {
-      "Accept": "application/json",
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
-    ...options
-  });
-
-  if (!response.ok) {
-    const payload = await tryReadJson(response);
-    const error = new Error(payload?.error?.message || `HTTP ${response.status}`);
-    error.status = response.status;
-    if (requireAuth && response.status === 401) {
-      state.admin = null;
-    }
-    throw error;
-  }
-
-  return tryReadJson(response);
-}
-
-async function fetchHealthJson(url) {
-  const response = await fetch(url, {
-    credentials: "same-origin",
-    headers: { "Accept": "application/json" }
-  });
-  const payload = await tryReadJson(response);
-  if (!response.ok && response.status !== 503) {
-    const error = new Error(payload?.error?.message || `HTTP ${response.status}`);
-    error.status = response.status;
-    throw error;
-  }
-  return payload;
-}
-
-async function tryReadJson(response) {
-  const text = await response.text();
-  return text ? JSON.parse(text) : null;
-}
-
-function showAlert(message, isError = false) {
-  const alert = document.getElementById("alert");
-  alert.textContent = message;
-  alert.classList.toggle("is-error", isError);
-  alert.hidden = false;
-}
-
-function showCreatedSecret(keyId, secret) {
-  const box = document.getElementById("created-secret");
-  box.hidden = false;
-  box.innerHTML = `
-    <strong>Секрет для ${escapeHtml(keyId)} показан один раз.</strong>
-    <div class="mono">${escapeHtml(secret)}</div>
-  `;
-}
-
-function workItem(title, text, action) {
-  const item = document.createElement("div");
-  item.className = "work-item";
-  item.innerHTML = `<strong>${escapeHtml(title)}</strong><div>${escapeHtml(text)}</div>`;
-  if (action) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "primary-button";
-    button.textContent = "Открыть действие";
-    button.style.marginTop = "10px";
-    button.addEventListener("click", action);
-    item.appendChild(button);
-  }
-  return item;
-}
-
-function appendEmptyRow(body, columns, text) {
-  const row = document.createElement("tr");
-  const cell = document.createElement("td");
-  cell.colSpan = columns;
-  cell.textContent = text;
-  row.appendChild(cell);
-  body.appendChild(row);
-}
-
-function detailBlock(title, rows) {
-  return `
-    <div class="detail-block">
-      <h3>${escapeHtml(title)}</h3>
-      <dl class="kv-list">
-        ${rows.map(([name, value]) => `
-          <dt>${escapeHtml(name)}</dt>
-          <dd>${escapeHtml(value ?? "Нет данных")}</dd>
-        `).join("")}
-      </dl>
-    </div>
-  `;
-}
-
-function renderDefinitionList(id, rows) {
-  document.getElementById(id).innerHTML = rows.map(([name, value]) => `
-    <dt>${escapeHtml(name)}</dt>
-    <dd>${escapeHtml(value ?? "Нет данных")}</dd>
-  `).join("");
-}
-
-function statusPill(status) {
-  const kind = status === "active" || status === "completed" || status === "healthy" ? "ok"
-    : status === "disabled" || status === "failed" || status === "blocked" || status === "full" ? "danger"
-      : "warn";
-  return `<span class="status-pill ${kind}">${escapeHtml(translateStatus(status))}</span>`;
-}
-
-function queueSummary(queue) {
-  if (!queue) {
-    return "Очередь недоступна";
-  }
-  return `queued ${queue.queued}, processing ${queue.processing}, failed ${queue.failed}, blocked ${queue.blocked}`;
-}
-
-function translateStatus(status) {
-  const map = {
-    active: "Активен",
-    disabled: "Отключен",
-    healthy: "Работает",
-    warning: "Предупреждение",
-    full: "Заполнено",
-    unhealthy: "Проблема",
-    unknown: "Нет данных",
-    failed: "Ошибка",
-    blocked: "Заблокирована",
-    stale: "Нет heartbeat",
-    completed: "Готово",
-    processing: "В работе",
-    queued: "В очереди",
-    cancelled: "Отменена"
-  };
-  return map[status] || status || "Нет данных";
-}
-
-function translateHealth(health) {
-  const map = {
-    healthy: "Работает",
-    degraded: "Есть проблемы",
-    unhealthy: "Недоступен",
-    unknown: "Нет данных"
-  };
-  return map[health] || health || "Нет данных";
-}
-
-function translateAction(action) {
-  const map = {
-    manual_retry_job: "Ручной retry задачи",
-    create_api_key: "Создание ключа API",
-    disable_api_key: "Отключение ключа API",
-    create_admin_user: "Создание администратора",
-    disable_admin_user: "Отключение администратора",
-    change_admin_password: "Смена пароля администратора"
-  };
-  return map[action] || action;
-}
-
-function shortId(value) {
-  return value ? value.slice(0, 8) : "";
-}
-
-function formatDate(value) {
-  if (!value) {
-    return "Нет данных";
-  }
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(new Date(value));
-}
-
-function formatDuration(value) {
-  return typeof value === "number" ? `${Math.round(value)} ms` : "Нет данных";
-}
-
-function formatBool(value) {
-  return value === true ? "Да" : value === false ? "Нет" : "Нет данных";
-}
-
-function formatBytes(value) {
-  if (typeof value !== "number") {
-    return "Не задано";
-  }
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-  let size = value;
-  let unitIndex = 0;
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex += 1;
-  }
-  const precision = unitIndex === 0 ? 0 : 1;
-  return `${size.toFixed(precision)} ${units[unitIndex]}`;
-}
-
-function pluralizeRu(count, one, few, many) {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) {
-    return one;
-  }
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
-    return few;
-  }
-  return many;
-}
-
-function setText(id, value) {
-  document.getElementById(id).textContent = value;
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }

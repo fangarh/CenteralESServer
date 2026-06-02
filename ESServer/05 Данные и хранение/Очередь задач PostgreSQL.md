@@ -180,6 +180,33 @@ index processing_jobs(heartbeat_at)
 index processing_result_index(capability, content_hash)
 ```
 
+## Миграции схемы
+
+Схема PostgreSQL применяется явным SQL migration runner-ом без Entity Framework.
+
+Текущий baseline:
+
+```text
+src/Shared/CenteralES.Infrastructure/Postgres/Migrations/0001_processing_baseline.sql
+```
+
+Runner:
+
+- загружает embedded `.sql` migrations из `CenteralES.Infrastructure`;
+- сортирует их по id;
+- перед применением создает служебную таблицу `schema_migrations`, если ее еще нет;
+- пропускает уже примененные migration id;
+- применяет каждую новую migration в отдельной транзакции;
+- пишет marker в `schema_migrations` только после успешного выполнения SQL.
+
+Web и Worker не выполняют schema SQL напрямую. Точка входа остается:
+
+```text
+PostgresDatabaseBootstrapper.ApplySchemaAsync
+```
+
+Это сохраняет текущий startup/bootstrap contract и дает точку расширения для следующих миграций без EF.
+
 ## Будущая замена
 
 Нужно проектировать через интерфейс:

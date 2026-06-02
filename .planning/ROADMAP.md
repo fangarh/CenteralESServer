@@ -57,7 +57,7 @@ Scope:
 - docker-compose с PostgreSQL и shared local storage;
 - configuration examples;
 - init command для первого admin;
-- migration/bootstrap process без EF;
+- migration/bootstrap process без EF; explicit SQL runner baseline implemented before Docker checkpoint;
 - smoke tests для локальной поставки.
 
 ### Phase 4: Admin MVP Completion
@@ -95,4 +95,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-02 after Admin Audit UI checkpoint*
+*Last updated: 2026-06-02 after SQL migration runner and Admin UI asset split*

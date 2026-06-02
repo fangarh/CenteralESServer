@@ -44,12 +44,7 @@ public sealed class PostgresDatabaseBootstrapper
     {
         ArgumentNullException.ThrowIfNull(dataSource);
 
-        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        await using var command = new NpgsqlCommand(Processing.PostgresProcessingSql.Schema, connection);
-        await command.ExecuteNonQueryAsync(cancellationToken);
-
-        await using var markBaseline = new NpgsqlCommand(Processing.PostgresProcessingSql.MarkBaselineMigration, connection);
-        markBaseline.Parameters.AddWithValue("applied_at", DateTimeOffset.UtcNow);
-        await markBaseline.ExecuteNonQueryAsync(cancellationToken);
+        var migrationRunner = new PostgresMigrationRunner();
+        await migrationRunner.ApplyAsync(dataSource, PostgresMigrationCatalog.Migrations, cancellationToken);
     }
 }

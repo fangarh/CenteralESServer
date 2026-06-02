@@ -109,6 +109,20 @@ PDF обработчик не отвечает
 
 Первый UI shell обслуживается самим Web-приложением как статические assets без отдельного Node/Docker runtime. Экран поддерживает login, сводку, failed/blocked jobs с retry одной задачи, пассивный статус PDF-обработчика, управление API keys, Admin Users и audit list. Цвета должны оставаться высококонтрастными: основной текст тёмный на светлом фоне, без светло-серого текста на белом.
 
+Текущий asset layout:
+
+```text
+src/Apps/CenteralES.Web/wwwroot/admin/index.html
+src/Apps/CenteralES.Web/wwwroot/admin/app.js
+src/Apps/CenteralES.Web/wwwroot/admin/formatters.js
+src/Apps/CenteralES.Web/wwwroot/admin/dom.js
+src/Apps/CenteralES.Web/wwwroot/admin/http.js
+src/Apps/CenteralES.Web/wwwroot/admin/confirm-dialog.js
+src/Apps/CenteralES.Web/wwwroot/admin/app.css
+```
+
+`app.js` держит состояние экранов, загрузчики данных и render/workflow-логику. Общие форматтеры, DOM helpers, HTTP client и confirm dialog вынесены в отдельные classic browser scripts без Node runtime и без сборщика.
+
 ## Основные сценарии администратора
 
 Главные сценарии MVP:

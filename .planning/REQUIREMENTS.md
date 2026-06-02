@@ -10,6 +10,7 @@
 - [x] **ARCH-01**: Solution разделён на Web, Worker, модули домена/application/infrastructure и tests.
 - [x] **ARCH-02**: Реализация не использует Entity Framework.
 - [x] **ARCH-03**: Основные бизнес-операции покрываются TDD-тестами до или вместе с реализацией.
+- [x] **ARCH-04**: PostgreSQL schema bootstrap использует явные SQL migration-файлы и runner без EF.
 
 ### Public API
 
@@ -87,6 +88,7 @@
 | ARCH-01 | Phase 1 | Done |
 | ARCH-02 | Phase 1 | Done |
 | ARCH-03 | Phase 1 | Done |
+| ARCH-04 | Phase 2 | Done: embedded SQL migration runner with `schema_migrations` baseline |
 | API-01 | Phase 1 | Done |
 | API-02 | Phase 1 | Done |
 | API-03 | Phase 1 | Done |
@@ -118,8 +120,8 @@
 | DEPLOY-02 | Phase 3 | Pending |
 
 **Coverage:**
-- v1 requirements: 32 total
-- Mapped to phases: 32
+- v1 requirements: 33 total
+- Mapped to phases: 33
 - Unmapped: 0
 
 ---

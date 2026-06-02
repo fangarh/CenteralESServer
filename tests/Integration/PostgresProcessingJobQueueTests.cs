@@ -13,6 +13,33 @@ namespace CenteralES.IntegrationTests;
 public sealed class PostgresProcessingJobQueueTests
 {
     [Fact]
+    public async Task Apply_schema_records_baseline_migration_once()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+
+        await using var connection = await dataSource.OpenConnectionAsync(CancellationToken.None);
+        await using var command = new NpgsqlCommand("""
+            select count(*)
+            from schema_migrations
+            where id = '0001_processing_baseline';
+            """, connection);
+
+        var count = (long)(await command.ExecuteScalarAsync(CancellationToken.None) ?? 0L);
+        Assert.Equal(1L, count);
+    }
+
+    [Fact]
     public async Task Enqueue_deduplicates_active_job_and_claims_it()
     {
         var connectionString = IntegrationTestDatabase.TryReadConnectionString();
