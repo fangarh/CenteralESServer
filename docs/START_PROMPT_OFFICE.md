@@ -59,7 +59,6 @@ C:\Users\Admin\.dotnet\dotnet.exe
 - Scripted release smoke прошёл: production-like project `centerales-release-smoke` был поднят с ignored `.env.production`, admin подготовлен из ignored `logon.env`, Public API key создан через Admin API с session/CSRF, `scripts/run-release-smoke.ps1 -SkipBuild` вернул `SMOKE_OK_RELEASE`, `status=completed`, `contract=pdf2txt-recognize-json-v1`; stack остановлен, контейнеров не осталось.
 
 Следующий логичный шаг:
-1. Закоммитить scripted release smoke checkpoint, если ещё не закоммичен.
-2. Если release blockers не найдены, создать MVP tag.
-3. Затем выбрать следующий backlog item: refactor `PostgresProcessingJobQueue` или полировка Admin MVP.
+1. Если release blockers не найдены, создать MVP tag.
+2. Затем выбрать следующий backlog item: refactor `PostgresProcessingJobQueue` или полировка Admin MVP.
 ```

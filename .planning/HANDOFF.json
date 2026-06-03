@@ -53,7 +53,6 @@
     }
   ],
   "remaining_work": [
-    "Commit scripted release smoke checkpoint",
     "Create MVP release tag if no further release blockers are identified",
     "PostgresProcessingJobQueue refactor debt",
     "Admin MVP polish/backlog"
@@ -78,5 +77,5 @@
     "Admin state-changing endpoints require session cookie and X-CSRF-Token",
     "Do not include raw secrets, input PDF files, temporaryFileKey, or large payloads in diagnostics/audit/support report"
   ],
-  "next_action": "Commit scripted release smoke checkpoint, then either tag the MVP release or continue with PostgresProcessingJobQueue refactor/Admin MVP polish."
+  "next_action": "Create the MVP release tag if no further release blockers are identified, then continue with PostgresProcessingJobQueue refactor/Admin MVP polish as post-release backlog."
 }
