@@ -68,7 +68,7 @@
 
 ### Delivery
 
-- [ ] **DEPLOY-01**: MVP запускается через Docker Compose.
+- [x] **DEPLOY-01**: MVP запускается через Docker Compose.
 - [x] **DEPLOY-02**: Compose содержит Web, Worker, PostgreSQL и shared local storage volume.
 
 ## v2 Requirements
@@ -134,8 +134,8 @@
 | ADMIN-10 | Phase 4 | Done: `/api/admin/storage`, `/api/admin/settings`, and Admin UI expose read-only retention policy visibility |
 | HEALTH-01 | Phase 2 | Done: Web endpoints plus Admin UI Health screen |
 | HEALTH-02 | Phase 2 | Done |
-| DEPLOY-01 | Phase 3 | Pending |
-| DEPLOY-02 | Phase 3 | Done: `compose.yaml` includes PostgreSQL, one-shot migrator, Web, Worker, shared temporary storage volume, explicit DB password requirement, non-root final images, demo-only `Fake` recognizer default with documented `Http`/endpoint override for real `pdf2txt`, and CodeRabbit `findings: 0`; Docker runtime validation remains under DEPLOY-01 because Docker CLI is unavailable locally |
+| DEPLOY-01 | Phase 3 | Done: Docker Desktop runtime validation passed with `CENTERALES_PDF_RECOGNIZER=Http` and real `pdf2txt`; `docker compose config --quiet`, `docker compose build`, `docker compose up -d`, `/health/live`, `/health/ready`, one-shot migrator, and Public upload -> Worker -> external `/recognize_json/` -> completed result polling all passed |
+| DEPLOY-02 | Phase 3 | Done: `compose.yaml` includes PostgreSQL, one-shot migrator, Web, Worker, shared temporary storage volume, explicit DB password requirement, non-root final images, demo-only `Fake` recognizer default with documented `Http`/endpoint override for real `pdf2txt`, and CodeRabbit `findings: 0` |
 
 **Coverage:**
 - v1 requirements: 42 total
@@ -144,4 +144,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-03 after source audit tail remediation*
+*Last updated: 2026-06-03 after real Docker Compose pdf2txt smoke*

@@ -50,16 +50,16 @@ Scope:
 
 ### Phase 3: Docker Compose Delivery MVP
 
-**Status:** Pending
+**Status:** Runtime smoke complete
 
 Scope:
 
-- Dockerfiles для Web и Worker;
-- docker-compose с PostgreSQL и shared local storage; baseline done with demo-only `Fake` recognizer default and explicit `Http`/endpoint override for real `pdf2txt`;
-- configuration examples; `.env.example` documents local demo versus real processor settings;
-- first-admin bootstrap/test client path; shared backend service, WinForms app, MVP service testing, and backend smoke implemented before Docker checkpoint;
-- migration/bootstrap process без EF; explicit SQL runner baseline implemented before Docker checkpoint;
-- smoke tests для локальной поставки.
+- Dockerfiles для Web и Worker implemented;
+- docker-compose с PostgreSQL и shared local storage implemented; baseline keeps demo-only `Fake` recognizer default and explicit `Http`/endpoint override for real `pdf2txt`;
+- configuration examples implemented; `.env.example` documents local demo versus real processor settings;
+- first-admin bootstrap/test client path implemented; shared backend service, WinForms app, MVP service testing, and backend smoke implemented before Docker checkpoint;
+- migration/bootstrap process без EF implemented; explicit SQL runner and one-shot DatabaseMigrator run before Web/Worker;
+- smoke tests для локальной поставки passed on 2026-06-03 with real `Http` recognizer: Public upload -> Worker -> external `pdf2txt` `/recognize_json/` -> completed result polling.
 
 ### Phase 4: Admin MVP Completion
 
@@ -96,4 +96,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-03 after source audit tail remediation*
+*Last updated: 2026-06-03 after real Docker Compose pdf2txt smoke*

@@ -107,35 +107,53 @@ findings: 0
 - Worker использует `IHttpClientFactory` для HTTP recognizer-а.
 - `PdfStampRecognition:Recognizer` теперь принимает только `Fake` или `Http`; неизвестное значение приводит к fail-fast при старте worker.
 
-## Не выполнено
+## Runtime smoke 2026-06-03
 
-Docker CLI на текущей машине недоступен:
+На машине с Docker Desktop выполнена реальная Compose-проверка без fake recognizer:
 
 ```text
-docker: The term 'docker' is not recognized
+docker compose -p centerales-real-smoke config --quiet
+docker compose -p centerales-real-smoke build
+docker compose -p centerales-real-smoke up -d
 ```
 
-Поэтому пока не выполнены:
+Локальная `.env` была ignored и задана в real-режиме:
 
-```powershell
-docker compose config
-docker compose build
-docker compose up
+```text
+CENTERALES_PDF_RECOGNIZER=Http
+CENTERALES_PDF2TXT_ENDPOINT=https://pdf2txt.selectel.dt1520.ru/recognize_json/
+```
+
+Результат:
+
+```text
+PostgreSQL: healthy
+Migrator: completed successfully
+Web /health/live: 200
+Web /health/ready: 200
+Worker: Resolved PdfStampRecognition:Recognizer as Http
+Worker: POST https://pdf2txt.selectel.dt1520.ru/recognize_json/ -> HTTP 200
+Public upload/polling with test.pdf: completed
+Contract: pdf2txt-recognize-json-v1
+```
+
+Одноразовый Public API key был засеян только в локальный compose PostgreSQL; key/secret не фиксировались в документации и не выводились.
+
+После smoke stack остановлен:
+
+```text
+docker compose -p centerales-real-smoke down
 ```
 
 ## Следующий шаг
 
-На машине с Docker Desktop или Docker Engine:
+Для повторного real-запуска:
 
-```powershell
+```text
 copy .env.example .env
+set CENTERALES_PDF_RECOGNIZER=Http
+set CENTERALES_PDF2TXT_ENDPOINT=https://.../recognize_json/
 docker compose config
 docker compose build
 docker compose up
-```
-
-Затем проверить:
-
-```text
-GET http://localhost:8080/health/ready
 ```

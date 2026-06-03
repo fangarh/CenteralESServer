@@ -1,14 +1,14 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-01T17:30:00+03:00",
-  "context": "phase",
-  "phase": "2",
-  "phase_name": "Security, Retry, Health, Admin Actions",
+  "timestamp": "2026-06-03T14:30:00+03:00",
+  "context": "delivery",
+  "phase": "3",
+  "phase_name": "Docker Compose Delivery MVP",
   "phase_dir": ".planning/phases/001-walking-skeleton-pdf-processing",
-  "status": "paused_for_context_cleanup",
+  "status": "docker_compose_real_smoke_complete",
   "last_commit": {
-    "hash": "ac03151",
-    "subject": "Refactor web API endpoint composition"
+    "hash": "24f212f",
+    "subject": "Fix source audit remediation tails"
   },
   "completed_checkpoints": [
     {
@@ -38,19 +38,33 @@
     {
       "name": "Web API composition refactor after code audit",
       "commit": "ac03151"
+    },
+    {
+      "name": "Docker Compose delivery baseline",
+      "commit": "6cc3150"
+    },
+    {
+      "name": "Source audit tail remediation",
+      "commit": "24f212f"
+    },
+    {
+      "name": "Docker Compose real pdf2txt runtime smoke",
+      "commit": "pending documentation commit"
     }
   ],
   "remaining_work": [
-    "Broader audit coverage and read API for Admin UI",
-    "Docker Compose delivery MVP",
-    "First admin init command",
-    "Admin UI completion"
+    "Commit current documentation/planning updates",
+    "Optional final dotnet build/test release gate",
+    "PostgresProcessingJobQueue refactor debt",
+    "Admin MVP polish/backlog"
   ],
   "verification": {
-    "build": "passed with known MSB3101 obj cache warnings",
-    "tests": "unit 40/40, integration 24/24",
-    "smoke": "passed with fake-pdf2txt after escalation; sandbox run can fail readiness because temporary file deletion in .codex-local is denied",
-    "dotnet_processes_after_smoke": "none"
+    "docker_compose_config": "passed with docker compose -p centerales-real-smoke config --quiet",
+    "docker_compose_build": "passed for Web, Worker, and DatabaseMigrator images",
+    "docker_compose_up": "passed: PostgreSQL healthy, migrator completed, Web and Worker started",
+    "health": "/health/live and /health/ready returned 200",
+    "real_pdf2txt_smoke": "passed with CENTERALES_PDF_RECOGNIZER=Http: Public upload of ignored test.pdf completed through external /recognize_json/ with contract pdf2txt-recognize-json-v1",
+    "cleanup": "temporary compose containers/network stopped with docker compose -p centerales-real-smoke down; volumes were left as Docker Compose state"
   },
   "critical_rules": [
     "Never print db.env secrets",
@@ -60,5 +74,5 @@
     "Admin state-changing endpoints require session cookie and X-CSRF-Token",
     "Do not include raw secrets, input PDF files, temporaryFileKey, or large payloads in diagnostics/audit/support report"
   ],
-  "next_action": "Implement broader audit/read API for Admin UI, continue code-audit refactor on PostgresProcessingJobQueue, or move to Docker Compose delivery MVP if audit read API is deferred to Admin UI completion."
+  "next_action": "Commit documentation/planning checkpoint, then either run final dotnet build/test gate or move to PostgresProcessingJobQueue refactor/Admin MVP polish."
 }
