@@ -49,7 +49,7 @@
     },
     {
       "name": "Docker Compose real pdf2txt runtime smoke",
-      "commit": "pending documentation commit"
+      "commit": "documented checkpoint"
     }
   ],
   "remaining_work": [
