@@ -252,7 +252,7 @@ repeatable release smoke script
 release runbook
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Commit:
 

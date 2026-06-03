@@ -54,7 +54,6 @@
   ],
   "remaining_work": [
     "Optionally run scripts/run-release-smoke.ps1 with an operator-created Public API key",
-    "Commit release readiness workflow checkpoint",
     "PostgresProcessingJobQueue refactor debt",
     "Admin MVP polish/backlog"
   ],
@@ -78,5 +77,5 @@
     "Admin state-changing endpoints require session cookie and X-CSRF-Token",
     "Do not include raw secrets, input PDF files, temporaryFileKey, or large payloads in diagnostics/audit/support report"
   ],
-  "next_action": "Commit release readiness workflow checkpoint, then run scripts/run-release-smoke.ps1 when an operator-created Public API key is available."
+  "next_action": "Run scripts/run-release-smoke.ps1 when an operator-created Public API key is available, then either tag the MVP release or continue with PostgresProcessingJobQueue refactor/Admin MVP polish."
 }
