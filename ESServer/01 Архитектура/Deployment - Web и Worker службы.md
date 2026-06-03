@@ -211,12 +211,16 @@ http://localhost:8080
 GET http://localhost:8080/health/ready
 ```
 
-По умолчанию compose использует `CENTERALES_PDF_RECOGNIZER=Fake`, чтобы delivery MVP поднимался без внешнего `pdf2txt`. Для реального processor-а нужно задать:
+По умолчанию compose использует `CENTERALES_PDF_RECOGNIZER=Fake`, чтобы локальная delivery/demo-проверка MVP поднималась без внешнего `pdf2txt`. Это не режим реального распознавания: payload будет формироваться fake adapter-ом и подходит только для smoke/demo контура.
+
+Для production-поставки или любой проверки с настоящим `pdf2txt` нужно явно задать:
 
 ```text
 CENTERALES_PDF_RECOGNIZER=Http
 CENTERALES_PDF2TXT_ENDPOINT=https://.../recognize_json/
 ```
+
+Если `CENTERALES_PDF_RECOGNIZER=Http`, endpoint pool не должен быть пустым; Worker fail-fast завершит старт при некорректной конфигурации.
 
 ## Общая инфраструктура
 

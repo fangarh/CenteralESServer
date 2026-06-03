@@ -10,11 +10,44 @@
 
   function showCreatedSecret(keyId, secret) {
     const box = document.getElementById("created-secret");
+    const credential = `${keyId}.${secret}`;
     box.hidden = false;
-    box.innerHTML = `
-      <strong>Секрет для ${escapeHtml(keyId)} показан один раз.</strong>
-      <div class="mono">${escapeHtml(secret)}</div>
-    `;
+    box.innerHTML = "";
+
+    const title = document.createElement("strong");
+    title.textContent = `Ключ ${keyId} показан один раз.`;
+
+    const value = document.createElement("div");
+    value.className = "mono secret-value";
+    value.textContent = credential;
+
+    const copyButton = document.createElement("button");
+    copyButton.type = "button";
+    copyButton.className = "secondary-button secret-copy-button";
+    copyButton.textContent = "Скопировать ключ";
+    copyButton.addEventListener("click", async () => {
+      await copyText(credential);
+      showAlert("Ключ скопирован.");
+    });
+
+    box.append(title, value, copyButton);
+  }
+
+  async function copyText(value) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return;
+    }
+
+    const input = document.createElement("textarea");
+    input.value = value;
+    input.setAttribute("readonly", "");
+    input.style.position = "fixed";
+    input.style.opacity = "0";
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand("copy");
+    input.remove();
   }
 
   function workItem(title, text, action) {

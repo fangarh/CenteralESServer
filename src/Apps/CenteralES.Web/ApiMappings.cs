@@ -90,7 +90,7 @@ internal static class ApiMappings
                 job.HttpStatus,
                 job.NormalizedError?.ToString(),
                 job.Retryable,
-                job.RawErrorExcerpt,
+                job.Excerpt,
                 job.CorrelationId),
             job.Attempts.Select(ToAdminProcessingAttemptResponse).ToArray());
     }

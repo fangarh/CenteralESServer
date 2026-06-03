@@ -142,7 +142,7 @@ public sealed class PostgresAdminJobReadStore : IAdminJobReadStore
             reader.IsDBNull(15) ? null : reader.GetInt32(15),
             reader.IsDBNull(16) ? null : Enum.Parse<NormalizedProcessorError>(reader.GetString(16)),
             reader.IsDBNull(17) ? null : reader.GetBoolean(17),
-            reader.IsDBNull(18) ? null : reader.GetString(18),
+            reader.IsDBNull(18) ? null : PostgresAdminReadStoreHelpers.ToSafeExcerpt(reader.GetString(18)),
             reader.IsDBNull(19) ? null : reader.GetString(19),
             Array.Empty<AdminProcessingAttemptDetails>());
 
@@ -197,7 +197,7 @@ public sealed class PostgresAdminJobReadStore : IAdminJobReadStore
                 job.NormalizedError,
                 job.Retryable,
                 job.CorrelationId,
-                PostgresAdminReadStoreHelpers.ToSafeExcerpt(job.RawErrorExcerpt)),
+                job.Excerpt),
             job.Attempts,
             result,
             processor,

@@ -113,6 +113,7 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - 2026-06-02: Standalone PostgreSQL migration CLI added as `CenteralES.DatabaseMigrator`. It applies embedded SQL migrations without EF, can optionally create the target database, supports `--no-create-database` for DBA/init-container flows, and keeps Web/Worker Production startup free of implicit DDL/bootstrap requirements.
 - 2026-06-02: Worker stale-processing recovery added. Worker periodically calls the queue recovery port, which uses current-subject guarded `FOR UPDATE SKIP LOCKED` SQL to move stale `processing` jobs back to `queued` without creating a new attempt or failed diagnostics; defaults are 5 minute stale timeout, 1 minute recovery interval, and batch size 50.
 - 2026-06-02: Local smoke helper restored under ignored `.codex-local/LocalSmoke`; it starts Web/Worker without launch profiles, seeds a temporary Public API key without printing secrets, runs fake-pdf2txt upload -> queue -> worker -> result polling, and passed with `SMOKE_OK`. Admin Processor status now exposes passive `queue.staleProcessing` for job-level recovery visibility.
+- 2026-06-03: Source audit tail remediation applied: Admin Job Details now returns only sanitized diagnostics excerpts, suspicious secret/password/token diagnostic text is redacted before Admin API exposure, `RegisterContentHashesAsync` no longer reuses a placeholder `CreateProcessingJobCommand`, stray local `tests/err` artifact was removed, and Compose docs now state that `Fake` recognizer is demo-only while real `pdf2txt` processing requires `CENTERALES_PDF_RECOGNIZER=Http` plus endpoint.
 
 ## Workflow Rules
 
@@ -122,4 +123,4 @@ The Phase 1 `pdf2txt` discovery facts have been captured in `ESServer/02 Мод�
 - If implementation reveals architecture mismatch, update Obsidian first.
 
 ---
-*Last updated: 2026-06-02 after Docker Compose baseline CodeRabbit review*
+*Last updated: 2026-06-03 after source audit tail remediation*

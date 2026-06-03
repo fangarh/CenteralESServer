@@ -55,8 +55,8 @@ Scope:
 Scope:
 
 - Dockerfiles для Web и Worker;
-- docker-compose с PostgreSQL и shared local storage;
-- configuration examples;
+- docker-compose с PostgreSQL и shared local storage; baseline done with demo-only `Fake` recognizer default and explicit `Http`/endpoint override for real `pdf2txt`;
+- configuration examples; `.env.example` documents local demo versus real processor settings;
 - first-admin bootstrap/test client path; shared backend service, WinForms app, MVP service testing, and backend smoke implemented before Docker checkpoint;
 - migration/bootstrap process без EF; explicit SQL runner baseline implemented before Docker checkpoint;
 - smoke tests для локальной поставки.
@@ -96,4 +96,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-02 after retention policy visibility*
+*Last updated: 2026-06-03 after source audit tail remediation*

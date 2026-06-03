@@ -8,6 +8,7 @@ using CenteralES.Processing;
 using CenteralES.Processing.Queue;
 using CenteralES.Processing.Workers;
 using CenteralES.PdfStampRecognition;
+using CenteralES.Storage;
 using Npgsql;
 
 namespace CenteralES.IntegrationTests;
@@ -960,6 +961,51 @@ public sealed class PostgresProcessingJobQueueTests
             CancellationToken.None);
 
         Assert.IsType<AdminManualRetryJobConflict>(retry);
+    }
+
+    [Fact]
+    public async Task RegisterContentHashes_adds_aliases_to_existing_subject()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var now = DateTimeOffset.UtcNow;
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var canonical = $"sha256:{Guid.NewGuid():N}";
+        var alias = $"gost-r-34.11-2012-256:{Guid.NewGuid():N}";
+        var enqueued = await queue.EnqueueAsync(
+            new CreateProcessingJobCommand(
+                PdfStampRecognitionConstants.Capability,
+                canonical,
+                $"temp/{Guid.NewGuid():N}.pdf",
+                now),
+            CancellationToken.None);
+
+        await queue.RegisterContentHashesAsync(
+            new RegisterProcessingContentHashesCommand(
+                enqueued.SubjectId,
+                PdfStampRecognitionConstants.Capability,
+                now.AddSeconds(1),
+                [new ProcessingContentHash(ContentHashAlgorithms.GostR34112012_256, alias)]),
+            CancellationToken.None);
+
+        var current = await queue.GetCurrentByHashAsync(
+            PdfStampRecognitionConstants.Capability,
+            alias,
+            CancellationToken.None);
+
+        Assert.NotNull(current);
+        Assert.Equal(enqueued.JobId, current.JobId);
     }
 
     [Fact]

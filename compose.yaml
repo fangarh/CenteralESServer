@@ -53,6 +53,8 @@ services:
       CENTERALES_PROCESSING_DATABASE: "Host=postgres;Port=5432;Database=${CENTERALES_POSTGRES_DB:-centerales};Username=${CENTERALES_POSTGRES_USER:-centerales};Password=${CENTERALES_POSTGRES_PASSWORD:?Set CENTERALES_POSTGRES_PASSWORD in .env}"
       Database__AutoBootstrap: "false"
       Storage__TemporaryRoot: /var/lib/centerales/temporary-files
+      # Fake keeps local Compose self-contained. Set CENTERALES_PDF_RECOGNIZER=Http
+      # and CENTERALES_PDF2TXT_ENDPOINT for real pdf2txt processing.
       PdfStampRecognition__Recognizer: ${CENTERALES_PDF_RECOGNIZER:-Fake}
       PdfStampRecognition__Processor__endpointPool__0: ${CENTERALES_PDF2TXT_ENDPOINT:-}
     volumes:

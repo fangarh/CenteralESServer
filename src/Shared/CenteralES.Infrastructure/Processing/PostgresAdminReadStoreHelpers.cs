@@ -160,6 +160,7 @@ internal static class PostgresAdminReadStoreHelpers
     public static string? ToSafeExcerpt(string? value)
     {
         const int maxLength = 2000;
+        string[] sensitiveMarkers = ["secret", "password", "token"];
 
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -167,6 +168,11 @@ internal static class PostgresAdminReadStoreHelpers
         }
 
         var normalized = value.Trim();
+        if (sensitiveMarkers.Any(marker => normalized.Contains(marker, StringComparison.OrdinalIgnoreCase)))
+        {
+            return "[redacted sensitive diagnostic]";
+        }
+
         return normalized.Length <= maxLength
             ? normalized
             : string.Concat(normalized.AsSpan(0, maxLength), "...");

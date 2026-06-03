@@ -42,7 +42,7 @@ public sealed record AdminProcessingJobDetails(
     int? HttpStatus,
     NormalizedProcessorError? NormalizedError,
     bool? Retryable,
-    string? RawErrorExcerpt,
+    string? Excerpt,
     string? CorrelationId,
     IReadOnlyList<AdminProcessingAttemptDetails> Attempts);
 

@@ -909,6 +909,32 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
     }
 
     [Fact]
+    public async Task Admin_job_details_returns_safe_diagnostics_excerpt()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        var admin = await CreateAdminClientAsync(_factory);
+        var rawExcerpt = string.Concat(
+            "secret-token-value ",
+            new string('x', 2500));
+        var blocked = await CreateBlockedProcessingJobAsync(rawExcerpt);
+
+        var details = await admin.Client.GetAsync($"/api/admin/jobs/{blocked.JobId:N}");
+
+        Assert.Equal(HttpStatusCode.OK, details.StatusCode);
+        var body = await details.Content.ReadAsStringAsync();
+        var payload = JsonSerializer.Deserialize<JsonElement>(body);
+
+        Assert.DoesNotContain("secret-token-value", body, StringComparison.OrdinalIgnoreCase);
+        var excerpt = payload.GetProperty("diagnostics").GetProperty("excerpt").GetString();
+        Assert.NotNull(excerpt);
+        Assert.True(excerpt!.Length <= 2003);
+    }
+
+    [Fact]
     public async Task Admin_job_support_report_returns_sanitized_context()
     {
         if (!HasConfiguredTestDatabase())
@@ -1404,7 +1430,8 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         await command.ExecuteNonQueryAsync(CancellationToken.None);
     }
 
-    private static async Task<BlockedJobFixture> CreateBlockedProcessingJobAsync()
+    private static async Task<BlockedJobFixture> CreateBlockedProcessingJobAsync(
+        string rawErrorExcerpt = "Unexpected response.")
     {
         var connectionString = IntegrationTestDatabase.TryReadConnectionString()
             ?? throw new InvalidOperationException("Test database is not configured.");
@@ -1441,7 +1468,7 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
                     NormalizedError: NormalizedProcessorError.ProcessorContractError,
                     Retryable: true,
                     CorrelationId: $"corr-{Guid.NewGuid():N}",
-                    RawErrorExcerpt: "Unexpected response."),
+                    RawErrorExcerpt: rawErrorExcerpt),
                 now.AddSeconds(2)),
             CancellationToken.None);
 

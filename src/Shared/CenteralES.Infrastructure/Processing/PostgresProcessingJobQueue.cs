@@ -24,7 +24,14 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         var existing = await FindSubjectAsync(connection, transaction, command, cancellationToken);
         if (existing is not null && IsActive(existing.CurrentJobStatus))
         {
-            await UpsertContentHashesAsync(connection, transaction, existing.SubjectId, command, cancellationToken);
+            await UpsertContentHashesAsync(
+                connection,
+                transaction,
+                existing.SubjectId,
+                command.Capability,
+                command.CreatedAt,
+                ResolveContentHashes(command.ContentHash, command.ContentHashes),
+                cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return new EnqueueProcessingJobResult(
                 existing.SubjectId,
@@ -72,7 +79,14 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
             await insertSubject.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        await UpsertContentHashesAsync(connection, transaction, subjectId, command, cancellationToken);
+        await UpsertContentHashesAsync(
+            connection,
+            transaction,
+            subjectId,
+            command.Capability,
+            command.CreatedAt,
+            ResolveContentHashes(command.ContentHash, command.ContentHashes),
+            cancellationToken);
 
         await using var insertJob = new NpgsqlCommand("""
             insert into processing_jobs (
@@ -127,6 +141,31 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         await transaction.CommitAsync(cancellationToken);
 
         return new EnqueueProcessingJobResult(subjectId, jobId, attemptNumber, ProcessingJobStatus.Queued, Deduplicated: false);
+    }
+
+    public async Task RegisterContentHashesAsync(
+        RegisterProcessingContentHashesCommand command,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (command.ContentHashes.Count == 0)
+        {
+            return;
+        }
+
+        await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        await UpsertContentHashesAsync(
+            connection,
+            transaction,
+            command.SubjectId,
+            command.Capability,
+            command.RegisteredAt,
+            command.ContentHashes,
+            cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<ClaimedProcessingJob?> ClaimNextAsync(DateTimeOffset now, CancellationToken cancellationToken)
@@ -650,10 +689,12 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         Guid subjectId,
-        CreateProcessingJobCommand command,
+        string capability,
+        DateTimeOffset createdAt,
+        IReadOnlyList<ProcessingContentHash> contentHashes,
         CancellationToken cancellationToken)
     {
-        var hashes = ResolveContentHashes(command).ToArray();
+        var hashes = NormalizeContentHashes(contentHashes);
         foreach (var hash in hashes)
         {
             await using var insert = new NpgsqlCommand("""
@@ -672,28 +713,41 @@ public sealed class PostgresProcessingJobQueue : IProcessingJobQueue
                 on conflict (capability, hash_value) do nothing;
                 """, connection, transaction);
             insert.Parameters.AddWithValue("subject_id", subjectId);
-            insert.Parameters.AddWithValue("capability", command.Capability);
+            insert.Parameters.AddWithValue("capability", capability);
             insert.Parameters.AddWithValue("algorithm", hash.Algorithm);
             insert.Parameters.AddWithValue("hash_value", hash.HashValue);
-            insert.Parameters.AddWithValue("created_at", command.CreatedAt);
+            insert.Parameters.AddWithValue("created_at", createdAt);
             await insert.ExecuteNonQueryAsync(cancellationToken);
         }
     }
 
-    private static IReadOnlyList<ProcessingContentHash> ResolveContentHashes(CreateProcessingJobCommand command)
+    private static IReadOnlyList<ProcessingContentHash> ResolveContentHashes(
+        string contentHash,
+        IReadOnlyList<ProcessingContentHash>? contentHashes)
     {
-        if (command.ContentHashes is { Count: > 0 })
+        if (contentHashes is { Count: > 0 })
         {
-            return command.ContentHashes;
+            return contentHashes;
         }
 
-        var algorithm = command.ContentHash.Split(':', 2)[0];
-        return [new ProcessingContentHash(algorithm, command.ContentHash)];
+        var algorithm = contentHash.Split(':', 2)[0];
+        return [new ProcessingContentHash(algorithm, contentHash)];
+    }
+
+    private static IReadOnlyList<ProcessingContentHash> NormalizeContentHashes(
+        IReadOnlyList<ProcessingContentHash> contentHashes)
+    {
+        return contentHashes
+            .Where(hash => !string.IsNullOrWhiteSpace(hash.Algorithm)
+                && !string.IsNullOrWhiteSpace(hash.HashValue))
+            .GroupBy(hash => hash.HashValue, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .ToArray();
     }
 
     private static IReadOnlyList<string> ResolveHashValues(CreateProcessingJobCommand command)
     {
-        return ResolveContentHashes(command)
+        return ResolveContentHashes(command.ContentHash, command.ContentHashes)
             .Select(hash => hash.HashValue)
             .Append(command.ContentHash)
             .Distinct(StringComparer.Ordinal)

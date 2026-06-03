@@ -8,3 +8,9 @@ public sealed record CreateProcessingJobCommand(
     string TemporaryFileKey,
     DateTimeOffset CreatedAt,
     IReadOnlyList<ProcessingContentHash>? ContentHashes = null);
+
+public sealed record RegisterProcessingContentHashesCommand(
+    Guid SubjectId,
+    string Capability,
+    DateTimeOffset RegisteredAt,
+    IReadOnlyList<ProcessingContentHash> ContentHashes);

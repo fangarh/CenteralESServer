@@ -413,6 +413,15 @@ th {
   padding: 12px;
 }
 
+.secret-value {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
+.secret-copy-button {
+  margin-top: 10px;
+}
+
 .details-panel {
   margin-top: 18px;
   border-top: 3px solid var(--primary);

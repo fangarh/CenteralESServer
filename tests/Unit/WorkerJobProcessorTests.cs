@@ -274,6 +274,13 @@ public sealed class WorkerJobProcessorTests
             throw new NotSupportedException();
         }
 
+        public Task RegisterContentHashesAsync(
+            RegisterProcessingContentHashesCommand command,
+            CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
+
         public Task CompleteAsync(CompleteProcessingJobCommand command, CancellationToken cancellationToken)
         {
             Completed = command;

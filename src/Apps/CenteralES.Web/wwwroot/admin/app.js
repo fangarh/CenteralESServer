@@ -104,19 +104,26 @@ function bindNavigation() {
 function bindForms() {
   document.getElementById("login-form").addEventListener("submit", async event => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    await login(form.get("login"), form.get("password"));
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const loginValue = form.get("login");
+    const passwordValue = form.get("password");
+    formElement.querySelector("[name='password']").value = "";
+    await login(loginValue, passwordValue);
   });
 
   document.getElementById("create-user-form").addEventListener("submit", async event => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const passwordValue = form.get("password");
+    formElement.querySelector("[name='password']").value = "";
     await apiPost("/api/admin/users", {
       login: form.get("login"),
-      password: form.get("password"),
+      password: passwordValue,
       comment: form.get("comment") || null
     });
-    event.currentTarget.reset();
+    formElement.reset();
     showAlert("Администратор создан.");
     await loadUsers();
     await loadAudit();
@@ -125,7 +132,8 @@ function bindForms() {
 
   document.getElementById("create-key-form").addEventListener("submit", async event => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const capabilities = String(form.get("capabilities"))
       .split(",")
       .map(value => value.trim())
@@ -137,7 +145,7 @@ function bindForms() {
       expiresAt: null,
       comment: form.get("comment") || null
     });
-    event.currentTarget.reset();
+    formElement.reset();
     showCreatedSecret(response.keyId, response.secret);
     await loadApiKeys();
     await loadAudit();

@@ -4,6 +4,8 @@ public interface IProcessingJobCommandQueue
 {
     Task<EnqueueProcessingJobResult> EnqueueAsync(CreateProcessingJobCommand command, CancellationToken cancellationToken);
 
+    Task RegisterContentHashesAsync(RegisterProcessingContentHashesCommand command, CancellationToken cancellationToken);
+
     Task CompleteAsync(CompleteProcessingJobCommand command, CancellationToken cancellationToken);
 
     Task DeferAsync(DeferProcessingJobCommand command, CancellationToken cancellationToken);

@@ -19,15 +19,20 @@ public sealed class MainForm : Form
     private readonly TextBox _baseUrlTextBox = new();
     private readonly TextBox _adminLoginTextBox = new();
     private readonly TextBox _adminPasswordTextBox = new();
-    private readonly TextBox _apiKeyTextBox = new();
-    private readonly TextBox _pdfPathTextBox = new();
     private readonly ComboBox _servicesComboBox = new();
     private readonly TextBox _serviceStatusTextBox = new();
     private readonly Button _loginHttpButton = new();
     private readonly Button _loadServicesButton = new();
     private readonly Button _testSelectedServiceButton = new();
     private readonly Button _testAllServicesButton = new();
-    private readonly Button _selectPdfButton = new();
+
+    private readonly TextBox _demoBaseUrlTextBox = new();
+    private readonly TextBox _demoApiKeyTextBox = new();
+    private readonly TextBox _demoPdfPathTextBox = new();
+    private readonly ComboBox _demoHashAlgorithmComboBox = new();
+    private readonly TextBox _demoStatusTextBox = new();
+    private readonly Button _runDemoButton = new();
+    private readonly Button _selectDemoPdfButton = new();
 
     private IReadOnlyList<MvpServiceDescriptor> _services = [];
     private MvpHttpTestClient? _mvpClient;
@@ -63,6 +68,7 @@ public sealed class MainForm : Form
 
         tabs.TabPages.Add(CreateBootstrapTab());
         tabs.TabPages.Add(CreateServicesTab());
+        tabs.TabPages.Add(CreatePdfDemoTab());
         Controls.Add(tabs);
     }
 
@@ -138,14 +144,14 @@ public sealed class MainForm : Form
 
     private TabPage CreateServicesTab()
     {
-        var tab = new TabPage("MVP сервисы");
-        var root = CreateRootLayout(rowCount: 9);
+        var tab = new TabPage("Доступность сервисов");
+        var root = CreateRootLayout(rowCount: 7);
 
         root.Controls.Add(new Label
         {
             AutoSize = true,
             Font = new Font(Font, FontStyle.Bold),
-            Text = "Зарегистрированные MVP-сервисы и тесты"
+            Text = "Доступность зарегистрированных MVP-сервисов"
         });
 
         root.Controls.Add(new Label
@@ -153,7 +159,7 @@ public sealed class MainForm : Form
             AutoSize = true,
             MaximumSize = new Size(900, 0),
             Margin = new Padding(0, 8, 0, 16),
-            Text = "Список берется из read-only Admin Services registry. Сейчас сервер отдает один MVP-сервис pdf-stamp-recognition."
+            Text = "Вкладка проверяет read-only Admin Services registry, /health/live, /health/ready и passive processor status. Для просмотра нужен admin-доступ."
         });
 
         _baseUrlTextBox.Text = "http://localhost:5045";
@@ -176,12 +182,6 @@ public sealed class MainForm : Form
         adminCredentials.Controls.Add(CreateLabeledControl("Admin password", _adminPasswordTextBox), 1, 0);
         root.Controls.Add(adminCredentials);
 
-        _apiKeyTextBox.UseSystemPasswordChar = true;
-        _apiKeyTextBox.PlaceholderText = "keyId.secret для функционального PDF-теста, необязательно";
-        root.Controls.Add(CreateLabeledControl("Public API key", _apiKeyTextBox));
-
-        root.Controls.Add(CreatePdfPicker());
-
         var buttons = new FlowLayoutPanel
         {
             AutoSize = true,
@@ -198,11 +198,11 @@ public sealed class MainForm : Form
         _loadServicesButton.AutoSize = true;
         _loadServicesButton.Click += async (_, _) => await RunOperationAsync(LoadServicesAsync, WriteServiceStatus);
 
-        _testSelectedServiceButton.Text = "Тест выбранного";
+        _testSelectedServiceButton.Text = "Проверить выбранный";
         _testSelectedServiceButton.AutoSize = true;
         _testSelectedServiceButton.Click += async (_, _) => await RunOperationAsync(TestSelectedServiceAsync, WriteServiceStatus);
 
-        _testAllServicesButton.Text = "Тест всех";
+        _testAllServicesButton.Text = "Проверить все";
         _testAllServicesButton.AutoSize = true;
         _testAllServicesButton.Click += async (_, _) => await RunOperationAsync(TestAllServicesAsync, WriteServiceStatus);
 
@@ -218,8 +218,65 @@ public sealed class MainForm : Form
 
         ConfigureStatusTextBox(
             _serviceStatusTextBox,
-            "Готово. Войдите в Admin API, получите список сервисов и запустите проверки.");
+            "Готово. Войдите в Admin API, получите список сервисов и проверьте доступность.");
         root.Controls.Add(_serviceStatusTextBox);
+
+        tab.Controls.Add(root);
+        return tab;
+    }
+
+    private TabPage CreatePdfDemoTab()
+    {
+        var tab = new TabPage("PDF demo");
+        var root = CreateRootLayout(rowCount: 8);
+
+        root.Controls.Add(new Label
+        {
+            AutoSize = true,
+            Font = new Font(Font, FontStyle.Bold),
+            Text = "Демонстрация Public API pdf-stamp-recognition"
+        });
+
+        root.Controls.Add(new Label
+        {
+            AutoSize = true,
+            MaximumSize = new Size(900, 0),
+            Margin = new Padding(0, 8, 0, 16),
+            Text = "Полный сценарий Public API без admin-пароля: загрузка PDF в /api/pdf-stamp-recognition/jobs, чтение /api/jobs/{jobId}, polling результата по hash."
+        });
+
+        _demoBaseUrlTextBox.Text = "http://localhost:5045";
+        root.Controls.Add(CreateLabeledControl("Web base URL", _demoBaseUrlTextBox));
+
+        _demoApiKeyTextBox.UseSystemPasswordChar = true;
+        _demoApiKeyTextBox.PlaceholderText = "Вставьте готовый ключ из админки: keyId.secret";
+        root.Controls.Add(CreateLabeledControl("Public API key", _demoApiKeyTextBox));
+
+        _demoHashAlgorithmComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+        _demoHashAlgorithmComboBox.Items.AddRange(new object[] { "sha256", "gost-r-34.11-2012-256" });
+        _demoHashAlgorithmComboBox.SelectedIndex = 0;
+        root.Controls.Add(CreateLabeledControl("Hash algorithm", _demoHashAlgorithmComboBox));
+
+        root.Controls.Add(CreateDemoPdfPicker());
+
+        var buttons = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0, 8, 0, 12)
+        };
+
+        _runDemoButton.Text = "Запустить PDF demo";
+        _runDemoButton.AutoSize = true;
+        _runDemoButton.Click += async (_, _) => await RunOperationAsync(RunPdfDemoAsync, WriteDemoStatus);
+        buttons.Controls.Add(_runDemoButton);
+        root.Controls.Add(buttons);
+
+        ConfigureStatusTextBox(
+            _demoStatusTextBox,
+            "Готово. Вставьте Public API key, выберите PDF и запустите demo.");
+        root.Controls.Add(_demoStatusTextBox);
 
         tab.Controls.Add(root);
         return tab;
@@ -244,7 +301,7 @@ public sealed class MainForm : Form
         return root;
     }
 
-    private Control CreatePdfPicker()
+    private Control CreateDemoPdfPicker()
     {
         var panel = new TableLayoutPanel
         {
@@ -256,14 +313,14 @@ public sealed class MainForm : Form
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-        _pdfPathTextBox.PlaceholderText = "PDF-файл для функционального теста, необязательно";
-        panel.Controls.Add(CreateLabeledControl("PDF file", _pdfPathTextBox), 0, 0);
+        _demoPdfPathTextBox.PlaceholderText = "PDF-файл для Public API demo";
+        panel.Controls.Add(CreateLabeledControl("PDF file", _demoPdfPathTextBox), 0, 0);
 
-        _selectPdfButton.Text = "Выбрать PDF";
-        _selectPdfButton.AutoSize = true;
-        _selectPdfButton.Margin = new Padding(8, 20, 0, 0);
-        _selectPdfButton.Click += (_, _) => SelectPdfFile();
-        panel.Controls.Add(_selectPdfButton, 1, 0);
+        _selectDemoPdfButton.Text = "Выбрать PDF";
+        _selectDemoPdfButton.AutoSize = true;
+        _selectDemoPdfButton.Margin = new Padding(8, 20, 0, 0);
+        _selectDemoPdfButton.Click += (_, _) => SelectPdfFile();
+        panel.Controls.Add(_selectDemoPdfButton, 1, 0);
 
         return panel;
     }
@@ -405,10 +462,8 @@ public sealed class MainForm : Form
     private async Task TestSelectedServiceAsync(CancellationToken cancellationToken)
     {
         var service = await GetSelectedOrFirstServiceAsync(cancellationToken);
-        var results = await _mvpClient!.TestServiceAsync(
+        var results = await _mvpClient!.TestServiceAvailabilityAsync(
             service,
-            string.IsNullOrWhiteSpace(_apiKeyTextBox.Text) ? null : _apiKeyTextBox.Text,
-            string.IsNullOrWhiteSpace(_pdfPathTextBox.Text) ? null : _pdfPathTextBox.Text,
             cancellationToken);
 
         WriteServiceStatus(FormatTestResults(service, results));
@@ -430,15 +485,31 @@ public sealed class MainForm : Form
         var blocks = new List<string>();
         foreach (var service in _services)
         {
-            var results = await _mvpClient!.TestServiceAsync(
+            var results = await _mvpClient!.TestServiceAvailabilityAsync(
                 service,
-                string.IsNullOrWhiteSpace(_apiKeyTextBox.Text) ? null : _apiKeyTextBox.Text,
-                string.IsNullOrWhiteSpace(_pdfPathTextBox.Text) ? null : _pdfPathTextBox.Text,
                 cancellationToken);
             blocks.Add(FormatTestResults(service, results));
         }
 
         WriteServiceStatus(string.Join($"{Environment.NewLine}{Environment.NewLine}", blocks));
+    }
+
+    private async Task RunPdfDemoAsync(CancellationToken cancellationToken)
+    {
+        using var client = new MvpHttpTestClient(ResolveDemoBaseUri());
+        var results = await client.RunPdfStampRecognitionDemoAsync(
+            _demoApiKeyTextBox.Text,
+            _demoPdfPathTextBox.Text,
+            _demoHashAlgorithmComboBox.SelectedItem?.ToString() ?? "sha256",
+            cancellationToken);
+
+        var lines = new List<string>
+        {
+            "Сервис: pdf-stamp-recognition / pdf2txt-http-recognizer",
+            $"Hash algorithm: {_demoHashAlgorithmComboBox.SelectedItem ?? "sha256"}"
+        };
+        lines.AddRange(results.Select(result => result.ToString()));
+        WriteDemoStatus(string.Join(Environment.NewLine, lines));
     }
 
     private async Task<MvpServiceDescriptor> GetSelectedOrFirstServiceAsync(CancellationToken cancellationToken)
@@ -485,10 +556,21 @@ public sealed class MainForm : Form
     private Uri ResolveBaseUri()
     {
         var configured = _baseUrlTextBox.Text.Trim();
+        return ResolveHttpUri(configured, "Web base URL");
+    }
+
+    private Uri ResolveDemoBaseUri()
+    {
+        var configured = _demoBaseUrlTextBox.Text.Trim();
+        return ResolveHttpUri(configured, "Demo Web base URL");
+    }
+
+    private static Uri ResolveHttpUri(string configured, string displayName)
+    {
         if (!Uri.TryCreate(configured, UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
-            throw new InvalidOperationException("Web base URL должен быть абсолютным http/https URL.");
+            throw new InvalidOperationException($"{displayName} должен быть абсолютным http/https URL.");
         }
 
         return uri;
@@ -524,7 +606,7 @@ public sealed class MainForm : Form
 
         if (dialog.ShowDialog(this) == DialogResult.OK)
         {
-            _pdfPathTextBox.Text = dialog.FileName;
+            _demoPdfPathTextBox.Text = dialog.FileName;
         }
     }
 
@@ -539,7 +621,8 @@ public sealed class MainForm : Form
             _loadServicesButton,
             _testSelectedServiceButton,
             _testAllServicesButton,
-            _selectPdfButton
+            _runDemoButton,
+            _selectDemoPdfButton
         })
         {
             button.Enabled = !busy;
@@ -569,5 +652,10 @@ public sealed class MainForm : Form
     private void WriteServiceStatus(string message)
     {
         _serviceStatusTextBox.Text = $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}]{Environment.NewLine}{message}";
+    }
+
+    private void WriteDemoStatus(string message)
+    {
+        _demoStatusTextBox.Text = $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}]{Environment.NewLine}{message}";
     }
 }

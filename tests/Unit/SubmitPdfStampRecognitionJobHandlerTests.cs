@@ -82,6 +82,44 @@ public sealed class SubmitPdfStampRecognitionJobHandlerTests
         Assert.StartsWith("incoming/gost-r-34-11-2012-256-", fileStore.LastKey, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task HandleAsync_returns_cached_result_found_by_any_computed_hash()
+    {
+        var content = "%PDF cached alias";
+        var commandQueue = new RecordingCommandQueue();
+        var fileStore = new RecordingTemporaryFileStore();
+        var resultStore = new RecordingResultStore
+        {
+            CachedResult = new PdfStampRecognitionResult(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                await ComputeHashAsync(content, ContentHashAlgorithm.Sha256),
+                """{"source":"alias-cache"}""",
+                "test-v1",
+                24,
+                DateTimeOffset.UtcNow)
+        };
+        var handler = CreateHandler(
+            commandQueue: commandQueue,
+            resultStore: resultStore,
+            temporaryFileStore: fileStore);
+
+        var result = await handler.HandleAsync(
+            CreateCommand(content, ContentHashAlgorithm.GostR34112012_256),
+            CancellationToken.None);
+
+        var completed = Assert.IsType<SubmitPdfStampRecognitionJobCompleted>(result);
+        Assert.Equal(resultStore.CachedResult.ResultIndexId, completed.Result.ResultIndexId);
+        Assert.Null(commandQueue.Enqueued);
+        Assert.False(fileStore.Saved);
+        Assert.NotNull(commandQueue.RegisteredContentHashes);
+        Assert.Equal(resultStore.CachedResult.SubjectId, commandQueue.RegisteredContentHashes.SubjectId);
+        Assert.Contains(commandQueue.RegisteredContentHashes.ContentHashes, hash => hash.Algorithm == ContentHashAlgorithms.Sha256);
+        Assert.Contains(commandQueue.RegisteredContentHashes.ContentHashes, hash => hash.Algorithm == ContentHashAlgorithms.GostR34112012_256);
+    }
+
     private static SubmitPdfStampRecognitionJobCommand CreateCommand(
         string content,
         ContentHashAlgorithm algorithm = ContentHashAlgorithm.Sha256)
@@ -119,6 +157,7 @@ public sealed class SubmitPdfStampRecognitionJobHandlerTests
     private sealed class RecordingCommandQueue : IProcessingJobCommandQueue
     {
         public CreateProcessingJobCommand? Enqueued { get; private set; }
+        public RegisterProcessingContentHashesCommand? RegisteredContentHashes { get; private set; }
 
         public Task<EnqueueProcessingJobResult> EnqueueAsync(CreateProcessingJobCommand command, CancellationToken cancellationToken)
         {
@@ -129,6 +168,14 @@ public sealed class SubmitPdfStampRecognitionJobHandlerTests
                 1,
                 ProcessingJobStatus.Queued,
                 Deduplicated: false));
+        }
+
+        public Task RegisterContentHashesAsync(
+            RegisterProcessingContentHashesCommand command,
+            CancellationToken cancellationToken)
+        {
+            RegisteredContentHashes = command;
+            return Task.CompletedTask;
         }
 
         public Task CompleteAsync(CompleteProcessingJobCommand command, CancellationToken cancellationToken)

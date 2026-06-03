@@ -122,7 +122,7 @@
 | STORE-04 | Phase 2 | Done: hard-limit upload guard plus Admin Storage capacity visibility |
 | STORE-05 | Phase 2 | Done: selectable prefixed content hash algorithms for Public PDF upload, including SHA-256 and GOST R 34.11-2012 / Streebog-256 |
 | STORE-06 | Phase 2 | Done: all supported content hashes are stored as subject aliases and public lookup resolves by any alias |
-| ADMIN-01 | Phase 1 | Done: `/admin` UI shell, Jobs/Job Details, Results, Processor Details, Health, Delivery, Storage, Settings plus Admin API |
+| ADMIN-01 | Phase 1 | Done: `/admin` UI shell, Jobs/Job Details with sanitized diagnostics excerpts, Results, Processor Details, Health, Delivery, Storage, Settings plus Admin API |
 | ADMIN-02 | Phase 2 | Done: Backend endpoint plus UI action for single-job retry |
 | ADMIN-03 | Phase 2 | Done: manual retry/API key/admin user audit plus filtered Admin Audit UI with safe details |
 | ADMIN-04 | Phase 2 | Done: Backend support report endpoint plus UI download action |
@@ -135,7 +135,7 @@
 | HEALTH-01 | Phase 2 | Done: Web endpoints plus Admin UI Health screen |
 | HEALTH-02 | Phase 2 | Done |
 | DEPLOY-01 | Phase 3 | Pending |
-| DEPLOY-02 | Phase 3 | Done: `compose.yaml` includes PostgreSQL, one-shot migrator, Web, Worker, shared temporary storage volume, explicit DB password requirement, non-root final images, and CodeRabbit `findings: 0`; Docker runtime validation remains under DEPLOY-01 because Docker CLI is unavailable locally |
+| DEPLOY-02 | Phase 3 | Done: `compose.yaml` includes PostgreSQL, one-shot migrator, Web, Worker, shared temporary storage volume, explicit DB password requirement, non-root final images, demo-only `Fake` recognizer default with documented `Http`/endpoint override for real `pdf2txt`, and CodeRabbit `findings: 0`; Docker runtime validation remains under DEPLOY-01 because Docker CLI is unavailable locally |
 
 **Coverage:**
 - v1 requirements: 42 total
@@ -144,4 +144,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-02 after Docker Compose baseline*
+*Last updated: 2026-06-03 after source audit tail remediation*
