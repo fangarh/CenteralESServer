@@ -50,7 +50,7 @@ Scope:
 
 ### Phase 3: Docker Compose Delivery MVP
 
-**Status:** Runtime smoke complete
+**Status:** Release readiness workflow verified
 
 Scope:
 
@@ -60,6 +60,8 @@ Scope:
 - first-admin bootstrap/test client path implemented; shared backend service, WinForms app, MVP service testing, and backend smoke implemented before Docker checkpoint;
 - migration/bootstrap process без EF implemented; explicit SQL runner and one-shot DatabaseMigrator run before Web/Worker;
 - smoke tests для локальной поставки passed on 2026-06-03 with real `Http` recognizer: Public upload -> Worker -> external `pdf2txt` `/recognize_json/` -> completed result polling.
+- production-like delivery workflow added after smoke: `compose.prod.yaml`, `.env.production.example`, `scripts/run-release-smoke.ps1`, and `docs/RELEASE_RUNBOOK.md`.
+- release artifacts verified with Compose config/build and full .NET build/test; scripted release smoke is ready for an operator-created Public API key.
 
 ### Phase 4: Admin MVP Completion
 
@@ -96,4 +98,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-03 after real Docker Compose pdf2txt smoke*
+*Last updated: 2026-06-03 after release readiness workflow verification*

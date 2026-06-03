@@ -47,6 +47,7 @@ C:\Users\Admin\.dotnet\dotnet.exe
 - Worker heartbeat и job heartbeat реализованы.
 - test.pdf локальный и ignored, можно использовать для ручного real pdf2txt smoke.
 - Docker Compose delivery path проверен без fake recognizer: локальная ignored `.env` задавала `CENTERALES_PDF_RECOGNIZER=Http` и endpoint реального `pdf2txt`; `docker compose -p centerales-real-smoke config --quiet`, `build`, `up -d`, `/health/live`, `/health/ready` и Public upload/polling через ignored `test.pdf` прошли успешно. Worker логировал `HttpPdfStampRecognizer`, POST во внешний `/recognize_json/`, HTTP 200 и completed job.
+- Release readiness workflow добавлен и проверен: `compose.prod.yaml` форсирует `Http` recognizer и обязательный endpoint для Web и Worker; `.env.production.example` можно копировать в ignored `.env.production`; `scripts/run-release-smoke.ps1` запускает production-like Compose и проверяет Public upload/result polling с операторским API key; `docs/RELEASE_RUNBOOK.md` описывает env setup, first admin/API key, smoke, volumes и backup минимум.
 
 Последняя проверка перед handoff:
 - docker compose config/build/up прошли для project `centerales-real-smoke`.
@@ -54,9 +55,10 @@ C:\Users\Admin\.dotnet\dotnet.exe
 - `/health/live` и `/health/ready` вернули 200.
 - Public upload ignored `test.pdf` -> Worker -> external `pdf2txt` `/recognize_json/` -> result polling вернул `completed`, contract `pdf2txt-recognize-json-v1`.
 - Compose stack остановлен через `docker compose -p centerales-real-smoke down`.
+- Release readiness verification: PowerShell parser для `scripts/run-release-smoke.ps1` прошёл; `docker compose --env-file .env.production.example -f compose.yaml -f compose.prod.yaml config --quiet` прошёл; Docker build с production override прошёл; `dotnet build` прошёл с известными obj-cache warnings; `dotnet test` прошёл: 75 unit, 63 integration.
 
 Следующий логичный шаг:
-1. Закоммитить текущий documentation/planning checkpoint.
-2. При необходимости прогнать финальный `dotnet build` / `dotnet test`.
+1. Закоммитить release workflow checkpoint, если ещё не закоммичен.
+2. При наличии operator-created API key прогнать `scripts/run-release-smoke.ps1`.
 3. Затем выбрать следующий backlog item: refactor `PostgresProcessingJobQueue` или полировка Admin MVP.
 ```

@@ -1,0 +1,10 @@
+services:
+  web:
+    environment:
+      PdfStampRecognition__Recognizer: Http
+      PdfStampRecognition__Processor__endpointPool__0: ${CENTERALES_PDF2TXT_ENDPOINT:?Set CENTERALES_PDF2TXT_ENDPOINT in .env.production or environment}
+
+  worker:
+    environment:
+      PdfStampRecognition__Recognizer: Http
+      PdfStampRecognition__Processor__endpointPool__0: ${CENTERALES_PDF2TXT_ENDPOINT:?Set CENTERALES_PDF2TXT_ENDPOINT in .env.production or environment}

@@ -53,8 +53,8 @@
     }
   ],
   "remaining_work": [
-    "Commit current documentation/planning updates",
-    "Optional final dotnet build/test release gate",
+    "Optionally run scripts/run-release-smoke.ps1 with an operator-created Public API key",
+    "Commit release readiness workflow checkpoint",
     "PostgresProcessingJobQueue refactor debt",
     "Admin MVP polish/backlog"
   ],
@@ -64,7 +64,11 @@
     "docker_compose_up": "passed: PostgreSQL healthy, migrator completed, Web and Worker started",
     "health": "/health/live and /health/ready returned 200",
     "real_pdf2txt_smoke": "passed with CENTERALES_PDF_RECOGNIZER=Http: Public upload of ignored test.pdf completed through external /recognize_json/ with contract pdf2txt-recognize-json-v1",
-    "cleanup": "temporary compose containers/network stopped with docker compose -p centerales-real-smoke down; volumes were left as Docker Compose state"
+    "cleanup": "temporary compose containers/network stopped with docker compose -p centerales-real-smoke down; volumes were left as Docker Compose state",
+    "release_readiness_artifacts": "verified: compose.prod.yaml, .env.production.example, scripts/run-release-smoke.ps1, and docs/RELEASE_RUNBOOK.md added; script parser, Compose config, Compose build, dotnet build, and dotnet test passed",
+    "dotnet_build": "passed with known MSB3101/MSB3061 obj-cache warnings only",
+    "dotnet_tests": "passed: 75 unit, 63 integration",
+    "scripted_release_smoke": "pending operator-created Public API key"
   },
   "critical_rules": [
     "Never print db.env secrets",
@@ -74,5 +78,5 @@
     "Admin state-changing endpoints require session cookie and X-CSRF-Token",
     "Do not include raw secrets, input PDF files, temporaryFileKey, or large payloads in diagnostics/audit/support report"
   ],
-  "next_action": "Commit documentation/planning checkpoint, then either run final dotnet build/test gate or move to PostgresProcessingJobQueue refactor/Admin MVP polish."
+  "next_action": "Commit release readiness workflow checkpoint, then run scripts/run-release-smoke.ps1 when an operator-created Public API key is available."
 }

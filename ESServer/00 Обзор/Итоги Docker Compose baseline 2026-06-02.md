@@ -8,11 +8,15 @@
 
 ```text
 compose.yaml
+compose.prod.yaml
 .dockerignore
 .env.example
+.env.production.example
 docker/Dockerfile.web
 docker/Dockerfile.worker
 docker/Dockerfile.migrator
+scripts/run-release-smoke.ps1
+docs/RELEASE_RUNBOOK.md
 ```
 
 Compose-состав:
@@ -63,7 +67,7 @@ Database:AutoBootstrap=false
 Storage:TemporaryRoot=/var/lib/centerales/temporary-files
 ```
 
-По умолчанию compose использует:
+По умолчанию base `compose.yaml` использует:
 
 ```text
 CENTERALES_PDF_RECOGNIZER=Fake
@@ -75,6 +79,14 @@ CENTERALES_PDF_RECOGNIZER=Fake
 CENTERALES_PDF_RECOGNIZER=Http
 CENTERALES_PDF2TXT_ENDPOINT=https://.../recognize_json/
 ```
+
+Для production-like запуска используется override:
+
+```text
+compose.prod.yaml
+```
+
+Он принудительно задаёт `PdfStampRecognition:Recognizer=Http` и обязательный endpoint для Web и Worker. Это важно, чтобы Admin Settings/Services показывали тот же recognizer и endpoint pool, которые реально использует Worker.
 
 ## Проверки
 
@@ -150,10 +162,16 @@ docker compose -p centerales-real-smoke down
 Для повторного real-запуска:
 
 ```text
-copy .env.example .env
-set CENTERALES_PDF_RECOGNIZER=Http
-set CENTERALES_PDF2TXT_ENDPOINT=https://.../recognize_json/
-docker compose config
-docker compose build
-docker compose up
+Copy-Item .env.production.example .env.production
+docker compose --env-file .env.production -f compose.yaml -f compose.prod.yaml config --quiet
+docker compose --env-file .env.production -f compose.yaml -f compose.prod.yaml build
+docker compose --env-file .env.production -f compose.yaml -f compose.prod.yaml up -d
 ```
+
+Повторяемый release smoke:
+
+```text
+powershell -ExecutionPolicy Bypass -File .\scripts\run-release-smoke.ps1 -EnvFile .env.production -PdfPath .\test.pdf -ApiKeyId "<key-id>" -ApiKeySecret "<secret>"
+```
+
+Операторский порядок поставки зафиксирован в `docs/RELEASE_RUNBOOK.md`.
