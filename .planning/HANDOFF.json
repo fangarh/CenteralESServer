@@ -53,7 +53,8 @@
     }
   ],
   "remaining_work": [
-    "Optionally run scripts/run-release-smoke.ps1 with an operator-created Public API key",
+    "Commit scripted release smoke checkpoint",
+    "Create MVP release tag if no further release blockers are identified",
     "PostgresProcessingJobQueue refactor debt",
     "Admin MVP polish/backlog"
   ],
@@ -67,7 +68,7 @@
     "release_readiness_artifacts": "verified: compose.prod.yaml, .env.production.example, scripts/run-release-smoke.ps1, and docs/RELEASE_RUNBOOK.md added; script parser, Compose config, Compose build, dotnet build, and dotnet test passed",
     "dotnet_build": "passed with known MSB3101/MSB3061 obj-cache warnings only",
     "dotnet_tests": "passed: 75 unit, 63 integration",
-    "scripted_release_smoke": "pending operator-created Public API key"
+    "scripted_release_smoke": "passed: admin prepared from ignored logon.env, Public API key created through Admin API with CSRF/session auth, scripts/run-release-smoke.ps1 completed with SMOKE_OK_RELEASE and stopped the Compose stack"
   },
   "critical_rules": [
     "Never print db.env secrets",
@@ -77,5 +78,5 @@
     "Admin state-changing endpoints require session cookie and X-CSRF-Token",
     "Do not include raw secrets, input PDF files, temporaryFileKey, or large payloads in diagnostics/audit/support report"
   ],
-  "next_action": "Run scripts/run-release-smoke.ps1 when an operator-created Public API key is available, then either tag the MVP release or continue with PostgresProcessingJobQueue refactor/Admin MVP polish."
+  "next_action": "Commit scripted release smoke checkpoint, then either tag the MVP release or continue with PostgresProcessingJobQueue refactor/Admin MVP polish."
 }

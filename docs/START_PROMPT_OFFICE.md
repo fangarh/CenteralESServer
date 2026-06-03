@@ -56,9 +56,10 @@ C:\Users\Admin\.dotnet\dotnet.exe
 - Public upload ignored `test.pdf` -> Worker -> external `pdf2txt` `/recognize_json/` -> result polling вернул `completed`, contract `pdf2txt-recognize-json-v1`.
 - Compose stack остановлен через `docker compose -p centerales-real-smoke down`.
 - Release readiness verification: PowerShell parser для `scripts/run-release-smoke.ps1` прошёл; `docker compose --env-file .env.production.example -f compose.yaml -f compose.prod.yaml config --quiet` прошёл; Docker build с production override прошёл; `dotnet build` прошёл с известными obj-cache warnings; `dotnet test` прошёл: 75 unit, 63 integration.
+- Scripted release smoke прошёл: production-like project `centerales-release-smoke` был поднят с ignored `.env.production`, admin подготовлен из ignored `logon.env`, Public API key создан через Admin API с session/CSRF, `scripts/run-release-smoke.ps1 -SkipBuild` вернул `SMOKE_OK_RELEASE`, `status=completed`, `contract=pdf2txt-recognize-json-v1`; stack остановлен, контейнеров не осталось.
 
 Следующий логичный шаг:
-1. Закоммитить release workflow checkpoint, если ещё не закоммичен.
-2. При наличии operator-created API key прогнать `scripts/run-release-smoke.ps1`.
+1. Закоммитить scripted release smoke checkpoint, если ещё не закоммичен.
+2. Если release blockers не найдены, создать MVP tag.
 3. Затем выбрать следующий backlog item: refactor `PostgresProcessingJobQueue` или полировка Admin MVP.
 ```

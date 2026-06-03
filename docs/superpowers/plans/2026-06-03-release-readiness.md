@@ -261,6 +261,26 @@ git add compose.prod.yaml .env.production.example .gitignore scripts/run-release
 git commit -m "Prepare release readiness workflow"
 ```
 
+- [x] **Step 5: Run scripted release smoke with Admin API-created key**
+
+Run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run-release-smoke.ps1 -ProjectName centerales-release-smoke -EnvFile .env.production -PdfPath .\test.pdf -ApiKeyId "<admin-api-created-key-id>" -ApiKeySecret "<admin-api-created-secret>" -SkipBuild
+```
+
+Expected:
+
+```text
+SMOKE_OK_RELEASE ... status=completed contract=pdf2txt-recognize-json-v1
+```
+
+Actual 2026-06-03:
+
+```text
+SMOKE_OK_RELEASE hash=sha256:07eeb9a537c7ffb5781d2d10e5417725109be674cbfe69201a47accd5257757e job=8dbee79a0158409f9baf5836612421f0 status=completed contract=pdf2txt-recognize-json-v1
+```
+
 ---
 
 ## Self-Review

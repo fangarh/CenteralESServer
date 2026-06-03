@@ -134,7 +134,7 @@
 | ADMIN-10 | Phase 4 | Done: `/api/admin/storage`, `/api/admin/settings`, and Admin UI expose read-only retention policy visibility |
 | HEALTH-01 | Phase 2 | Done: Web endpoints plus Admin UI Health screen |
 | HEALTH-02 | Phase 2 | Done |
-| DEPLOY-01 | Phase 3 | Done: Docker Desktop runtime validation passed with real `pdf2txt`; release workflow now includes `compose.prod.yaml`, `.env.production.example`, `scripts/run-release-smoke.ps1`, and `docs/RELEASE_RUNBOOK.md` for repeatable production-like validation without fake recognizer; artifacts verified with Compose config/build and full .NET build/test |
+| DEPLOY-01 | Phase 3 | Done: Docker Desktop runtime validation passed with real `pdf2txt`; release workflow now includes `compose.prod.yaml`, `.env.production.example`, `scripts/run-release-smoke.ps1`, and `docs/RELEASE_RUNBOOK.md` for repeatable production-like validation without fake recognizer; artifacts verified with Compose config/build, full .NET build/test, and scripted release smoke using an Admin API-created Public API key |
 | DEPLOY-02 | Phase 3 | Done: `compose.yaml` includes PostgreSQL, one-shot migrator, Web, Worker, shared temporary storage volume, explicit DB password requirement, non-root final images, demo-only `Fake` recognizer default, and production override forces `Http` recognizer plus endpoint for both Web and Worker |
 
 **Coverage:**
@@ -144,4 +144,4 @@
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-03 after release readiness workflow verification*
+*Last updated: 2026-06-03 after scripted release smoke*

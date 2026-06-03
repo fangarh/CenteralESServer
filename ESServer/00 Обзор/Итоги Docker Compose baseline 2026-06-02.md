@@ -157,6 +157,34 @@ Contract: pdf2txt-recognize-json-v1
 docker compose -p centerales-real-smoke down
 ```
 
+## Scripted release smoke 2026-06-03
+
+После добавления production override и release smoke script выполнена повторяемая проверка:
+
+```text
+docker compose --env-file .env.production -p centerales-release-smoke -f compose.yaml -f compose.prod.yaml build
+docker compose --env-file .env.production -p centerales-release-smoke -f compose.yaml -f compose.prod.yaml up -d
+```
+
+Отличие от первого runtime smoke:
+
+- использовался `compose.prod.yaml`, который принудительно задаёт `Http` recognizer и endpoint для Web и Worker;
+- admin был подготовлен из ignored `logon.env`;
+- Public API key был создан через Admin API после login/session/CSRF, а не прямым insert в БД;
+- `scripts/run-release-smoke.ps1` выполнил production-like проверку без вывода key/secret.
+
+Результат:
+
+```text
+ADMIN_LOGIN=ok
+API_KEY_CREATE=ok
+SMOKE_OK_RELEASE
+status=completed
+contract=pdf2txt-recognize-json-v1
+```
+
+После scripted smoke stack был остановлен самим script-ом; контейнеров `centerales-release-smoke` не осталось.
+
 ## Следующий шаг
 
 Для повторного real-запуска:
