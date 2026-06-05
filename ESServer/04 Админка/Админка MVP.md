@@ -143,7 +143,7 @@ src/Apps/CenteralES.Web/wwwroot/admin/app.css
 
 Список возможностей и обработчиков.
 
-Текущий skeleton read-only API:
+Текущий processor status API:
 
 ```http
 GET /api/admin/processors/pdf2txt-http-recognizer
@@ -151,7 +151,20 @@ GET /api/admin/processors/pdf2txt-http-recognizer
 
 Endpoint требует admin session cookie.
 
-Endpoint показывает passive status для processor-а без активного вызова внешнего `/recognize_json/`: capability, processor key, health, queue counts, worker heartbeats и последние diagnostics. Активные health/probe действия откладываются до подтверждения безопасного diagnostic сценария.
+Endpoint показывает passive status для processor-а без активного вызова внешнего `/recognize_json/`: capability, processor key, health, queue counts, worker heartbeats, endpoint runtime distribution и последние diagnostics. Активные health/probe действия откладываются до подтверждения безопасного diagnostic сценария.
+
+Текущий managed endpoints API:
+
+```http
+GET /api/admin/processors/pdf2txt-http-recognizer/endpoints?capability=pdf-stamp-recognition
+POST /api/admin/processors/pdf2txt-http-recognizer/endpoints
+PATCH /api/admin/processors/pdf2txt-http-recognizer/endpoints/{endpointId}
+POST /api/admin/processors/pdf2txt-http-recognizer/endpoint-checks
+```
+
+`GET` требует admin session cookie и показывает общий список `source=env` + `source=db`, а также `effectiveEndpoints[]` для Worker snapshot. `POST` и `PATCH` требуют `X-CSRF-Token`, пишут audit и меняют только managed DB endpoint-ы. Env endpoint-ы остаются bootstrap/default fallback и напрямую из UI не редактируются.
+
+`POST /endpoint-checks` — отдельный ручной diagnostic action для прикладного администратора. Endpoint требует admin session cookie и `X-CSRF-Token`, выбирает target только из уже настроенных `env/db` endpoint-ов, берёт PDF из `PdfStampRecognition:Diagnostics:SamplePdfPath`, отправляет его напрямую в выбранный внешний `/recognize_json/` и возвращает только безопасную диагностику: sanitized endpoint, status, HTTP status, duration, response size, normalized error и короткий excerpt. Он не создаёт processing job, не пишет result payload и не участвует в `/health/live`, `/health/ready` или realtime refresh. Если sample PDF не настроен или недоступен, результат `notConfigured`; внешний processor не вызывается. Частый запуск ограничивается cooldown `PdfStampRecognition:Diagnostics:EndpointCheckCooldown`.
 
 Если worker heartbeats отсутствуют, processor health остаётся `unknown`. Если есть хотя бы один свежий worker heartbeat, skeleton возвращает `healthy`; если все worker heartbeat старше `3 minutes`, возвращает `unhealthy`.
 
@@ -194,7 +207,21 @@ Runtime-параметры компонента управляются на ст
 /admin -> Обработчик
 ```
 
-Первый экран Processor Details показывает passive health для `pdf2txt-http-recognizer`, queue counts, worker heartbeats и recent diagnostics. Редактирование endpoint pool, retry policy и concurrency limits пока не включено в UI, потому что для этого нужен отдельный backend checkpoint с audit, подтверждением и валидацией влияния на новые задачи.
+Первый экран Processor Details показывает passive health для `pdf2txt-http-recognizer`, queue counts, worker heartbeats, recent diagnostics и управление DB-managed endpoint-ами. Retry policy и глобальные pool settings остаются отдельными будущими checkpoint-ами.
+
+Текущий endpoint-management checkpoint добавлен на тот же экран:
+
+- Add endpoint;
+- source `env/db`;
+- enable/disable для DB-managed endpoint-а;
+- изменение `concurrencyLimit`;
+- отображение effective snapshot;
+- runtime distribution остаётся пассивной: live/stale workers, in-flight, capacity, recent attempts/errors.
+- realtime-панель с polling refresh каждые `2 seconds`, когда администратор явно включает `Realtime on`;
+- endpoint runtime distribution показывает `activeProcessing`, utilization percent, avg/p95/max/last duration, completed/minute, recent attempts, failed/blocked/retryable counts и last HTTP/error.
+- ручная кнопка `Проверить` для configured endpoint-а запускает только Admin diagnostic check с sample PDF, cooldown и подтверждением; результат показывается в строке endpoint-а и не создаёт обычную job.
+
+UI и API не запускают health check через внешний `/recognize_json/`. Realtime refresh перечитывает только Admin Processor status. Изменения endpoint-ов влияют только на новые leases; уже взятые jobs не прерываются.
 
 Опасные изменения требуют подтверждения:
 

@@ -6,10 +6,10 @@
 
 ```text
 tag: v0.1.0-mvp
-commit: 47a8a95 Finalize MVP release handoff
+commit: e557142 Update Obsidian MVP release notes
 ```
 
-Тег создан локально после прохождения release gate.
+Аннотированный тег создан локально после прохождения release gate и финальной синхронизации Obsidian release notes.
 
 ## Что входит в MVP
 

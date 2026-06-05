@@ -1050,6 +1050,68 @@ public sealed class PostgresProcessingJobQueueTests
         Assert.False(worker.Stale);
     }
 
+    [Fact]
+    public async Task Worker_endpoint_metrics_are_visible_in_admin_processor_status()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString();
+        if (connectionString is null)
+        {
+            return;
+        }
+
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var workerId = $"integration-worker-{Guid.NewGuid():N}";
+        var now = DateTimeOffset.UtcNow;
+        var heartbeatStore = new PostgresWorkerHeartbeatStore(dataSource);
+        var adminStore = new PostgresAdminProcessorReadStore(dataSource);
+
+        await heartbeatStore.HeartbeatAsync(
+            new HeartbeatWorkerCommand(
+                workerId,
+                PdfStampRecognitionConstants.ProcessorKey,
+                PdfStampRecognitionConstants.Capability,
+                now.AddMinutes(-1),
+                now,
+                new[]
+                {
+                    new WorkerEndpointMetric(
+                        "https://pdf2txt-a.local/recognize_json/",
+                        Enabled: true,
+                        Health: "unknown",
+                        InFlight: 2,
+                        ConcurrencyLimit: 3),
+                    new WorkerEndpointMetric(
+                        "https://pdf2txt-b.local/recognize_json/",
+                        Enabled: true,
+                        Health: "healthy",
+                        InFlight: 0,
+                        ConcurrencyLimit: 3)
+                }),
+            CancellationToken.None);
+
+        var status = await adminStore.GetProcessorStatusAsync(
+            PdfStampRecognitionConstants.ProcessorKey,
+            PdfStampRecognitionConstants.Capability,
+            recentDiagnosticsLimit: 10,
+            CancellationToken.None);
+
+        var endpointA = Assert.Single(
+            status.EndpointRuntimes,
+            endpoint => endpoint.Endpoint == "https://pdf2txt-a.local/recognize_json/");
+
+        Assert.Equal(1, endpointA.LiveWorkerCount);
+        Assert.Equal(0, endpointA.StaleWorkerCount);
+        Assert.Equal(2, endpointA.InFlight);
+        Assert.Equal(3, endpointA.ConcurrencyLimit);
+        Assert.Equal("unknown", endpointA.Health);
+    }
+
     private static async Task ResetProcessingTablesAsync(NpgsqlDataSource dataSource, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);

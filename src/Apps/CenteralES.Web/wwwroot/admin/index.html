@@ -266,8 +266,12 @@
                 <h2>PDF обработчик</h2>
                 <p>Пассивное состояние `pdf2txt-http-recognizer`: очередь, workers и последние diagnostics без вызова внешнего сервиса.</p>
               </div>
-              <button id="refresh-processor-button" class="secondary-button" type="button">Обновить обработчик</button>
+              <div class="button-row">
+                <button id="processor-realtime-toggle" class="secondary-button" type="button">Realtime off</button>
+                <button id="refresh-processor-button" class="secondary-button" type="button">Обновить обработчик</button>
+              </div>
             </div>
+            <p id="processor-realtime-status" class="muted-line">Realtime выключен.</p>
             <div class="summary-grid processor-summary">
               <div class="summary-tile">
                 <span class="tile-label">Состояние</span>
@@ -300,8 +304,79 @@
                 <div class="report-summary">
                   <div>Админка показывает пассивное состояние обработчика.</div>
                   <div>Проверка работоспособности не отправляет пользовательский PDF.</div>
-                  <div>Редактирование endpoint pool и concurrency limits будет отдельным backend/UI checkpoint.</div>
+                  <div>Endpoint pool редактируется без вызова внешнего `pdf2txt`.</div>
                 </div>
+              </div>
+            </div>
+            <div class="detail-block">
+              <div class="section-header">
+                <div>
+                  <h3>Managed endpoints</h3>
+                  <p id="processor-effective-count">0 effective</p>
+                </div>
+              </div>
+              <form id="processor-endpoint-form" class="inline-form">
+                <label>
+                  Endpoint
+                  <input name="endpoint" placeholder="https://pdf2txt.local/recognize_json/" required>
+                </label>
+                <label>
+                  Concurrency
+                  <input name="concurrencyLimit" type="number" min="1" max="1000" value="1" required>
+                </label>
+                <label>
+                  Priority
+                  <input name="priority" type="number" value="0">
+                </label>
+                <label>
+                  Комментарий
+                  <input name="comment" maxlength="1000" placeholder="Причина изменения">
+                </label>
+                <button class="primary-button" type="submit">Добавить endpoint</button>
+              </form>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Endpoint</th>
+                      <th>Source</th>
+                      <th>Статус</th>
+                      <th>Capacity</th>
+                      <th>Priority</th>
+                      <th>Effective</th>
+                      <th>Check</th>
+                      <th>Updated</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="processor-managed-endpoints-body"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="detail-block">
+              <div class="section-header compact-header">
+                <div>
+                  <h3>Endpoint runtime distribution</h3>
+                  <p>Live-нагрузка берется из heartbeat Worker-а, latency и throughput - из последних diagnostics.</p>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Endpoint</th>
+                      <th>Runtime</th>
+                      <th>Load</th>
+                      <th>Latency</th>
+                      <th>Throughput</th>
+                      <th>Recent</th>
+                      <th>Results</th>
+                      <th>Failures</th>
+                      <th>Last</th>
+                    </tr>
+                  </thead>
+                  <tbody id="processor-endpoints-body"></tbody>
+                </table>
               </div>
             </div>
             <div class="detail-block">

@@ -11,7 +11,10 @@ using CenteralES.Infrastructure.Processing;
 using CenteralES.PdfStampRecognition;
 using CenteralES.Processing;
 using CenteralES.Processing.Queue;
+using CenteralES.Processing.Workers;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Npgsql;
 
 namespace CenteralES.IntegrationTests;
@@ -99,9 +102,23 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
         var js = await client.GetStringAsync("/admin/app.js?v=20260602-10");
 
         Assert.Contains("processors-tab", html, StringComparison.Ordinal);
+        Assert.Contains("processor-endpoints-body", html, StringComparison.Ordinal);
+        Assert.Contains("processor-endpoint-form", html, StringComparison.Ordinal);
+        Assert.Contains("processor-managed-endpoints-body", html, StringComparison.Ordinal);
+        Assert.Contains("processor-realtime-toggle", html, StringComparison.Ordinal);
+        Assert.Contains("processor-realtime-status", html, StringComparison.Ordinal);
+        Assert.Contains("<th>Check</th>", html, StringComparison.Ordinal);
         Assert.Contains("processor-workers-body", html, StringComparison.Ordinal);
         Assert.Contains("processor-diagnostics-body", html, StringComparison.Ordinal);
         Assert.Contains("renderProcessorDetails", js, StringComparison.Ordinal);
+        Assert.Contains("renderProcessorEndpointManagement", js, StringComparison.Ordinal);
+        Assert.Contains("updateProcessorEndpoint", js, StringComparison.Ordinal);
+        Assert.Contains("checkProcessorEndpoint", js, StringComparison.Ordinal);
+        Assert.Contains("/endpoint-checks", js, StringComparison.Ordinal);
+        Assert.Contains("startProcessorRealtime", js, StringComparison.Ordinal);
+        Assert.Contains("utilizationPercent", js, StringComparison.Ordinal);
+        Assert.Contains("averageDurationMs", js, StringComparison.Ordinal);
+        Assert.Contains("renderProcessorEndpointDistribution", js, StringComparison.Ordinal);
         Assert.Contains("/api/admin/processors/pdf2txt-http-recognizer", js, StringComparison.Ordinal);
     }
 
@@ -536,7 +553,8 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
             && check.GetProperty("status").GetString() == "healthy");
         Assert.Contains(checks, check =>
             check.GetProperty("name").GetString() == "temporaryStorage"
-            && check.GetProperty("status").GetString() == "healthy");
+            && check.GetProperty("status").GetString() == "healthy"
+            && check.TryGetProperty("detail", out _));
     }
 
     [Fact]
@@ -1289,8 +1307,222 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
             new[] { "unknown", "healthy", "unhealthy" });
         Assert.True(payload.GetProperty("queue").GetProperty("queued").GetInt32() >= 1);
         Assert.True(payload.GetProperty("queue").TryGetProperty("staleProcessing", out _));
+        Assert.True(payload.TryGetProperty("endpoints", out _));
         Assert.True(payload.TryGetProperty("workers", out _));
         Assert.True(payload.TryGetProperty("recentDiagnostics", out _));
+    }
+
+    [Fact]
+    public async Task Admin_processor_status_returns_recent_endpoint_distribution()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        await CreateProcessorEndpointDistributionAsync();
+        var admin = await CreateAdminClientAsync(_factory);
+        var response = await admin.Client.GetAsync("/api/admin/processors/pdf2txt-http-recognizer");
+        var body = await response.Content.ReadAsStringAsync();
+        var payload = JsonSerializer.Deserialize<JsonElement>(body);
+        var endpoints = payload.GetProperty("endpoints").EnumerateArray().ToArray();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var endpointA = endpoints.Single(endpoint =>
+            endpoint.GetProperty("endpoint").GetString() == "https://processor-a.local/recognize_json/");
+        var endpointB = endpoints.Single(endpoint =>
+            endpoint.GetProperty("endpoint").GetString() == "https://processor-b.local/recognize_json/");
+
+        Assert.False(endpointA.GetProperty("configured").GetBoolean());
+        Assert.Equal(2, endpointA.GetProperty("recentAttempts").GetInt32());
+        Assert.Equal(1, endpointA.GetProperty("completed").GetInt32());
+        Assert.Equal(1, endpointA.GetProperty("blocked").GetInt32());
+        Assert.Equal(1, endpointA.GetProperty("retryableFailures").GetInt32());
+        Assert.Equal(1, endpointA.GetProperty("liveWorkerCount").GetInt32());
+        Assert.Equal(2, endpointA.GetProperty("inFlight").GetInt32());
+        Assert.Equal(3, endpointA.GetProperty("concurrencyLimit").GetInt32());
+        Assert.Equal(2, endpointA.GetProperty("activeProcessing").GetInt32());
+        Assert.Equal(67, endpointA.GetProperty("utilizationPercent").GetInt32());
+        Assert.Equal(25, endpointA.GetProperty("averageDurationMs").GetDouble());
+        Assert.Equal(25, endpointA.GetProperty("p95DurationMs").GetDouble());
+        Assert.Equal(25, endpointA.GetProperty("maxDurationMs").GetDouble());
+        Assert.Equal(25, endpointA.GetProperty("lastDurationMs").GetDouble());
+        Assert.True(endpointA.GetProperty("completedPerMinute").GetDouble() > 0);
+        Assert.Equal("unknown", endpointA.GetProperty("runtimeHealth").GetString());
+        Assert.Equal("ProcessorTimeout", endpointA.GetProperty("lastNormalizedError").GetString());
+
+        Assert.Equal(1, endpointB.GetProperty("recentAttempts").GetInt32());
+        Assert.Equal(1, endpointB.GetProperty("completed").GetInt32());
+        Assert.Equal(0, endpointB.GetProperty("activeProcessing").GetInt32());
+        Assert.Equal(0, endpointB.GetProperty("utilizationPercent").GetInt32());
+
+        Assert.DoesNotContain("secret", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("token=", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Admin_processor_endpoint_can_be_added_and_listed_without_secret_bearing_parts()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        await ResetProcessorEndpointTablesAsync();
+        var admin = await CreateAdminClientAsync(_factory);
+        using var createRequest = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/admin/processors/pdf2txt-http-recognizer/endpoints");
+        createRequest.Headers.Add("X-CSRF-Token", admin.CsrfToken);
+        createRequest.Content = JsonContent.Create(new
+        {
+            Capability = PdfStampRecognitionConstants.Capability,
+            Endpoint = "https://user:password@processor-managed.local/recognize_json/?token=hidden#fragment",
+            ConcurrencyLimit = 4,
+            Priority = 20
+        });
+
+        var created = await admin.Client.SendAsync(createRequest);
+        var list = await admin.Client.GetAsync("/api/admin/processors/pdf2txt-http-recognizer/endpoints?capability=pdf-stamp-recognition");
+        var body = await list.Content.ReadAsStringAsync();
+        var payload = JsonSerializer.Deserialize<JsonElement>(body);
+        var endpoints = payload.GetProperty("endpoints").EnumerateArray().ToArray();
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        var managed = Assert.Single(endpoints, endpoint =>
+            endpoint.GetProperty("endpoint").GetString() == "https://processor-managed.local/recognize_json/");
+        Assert.Equal("db", managed.GetProperty("source").GetString());
+        Assert.True(managed.GetProperty("enabled").GetBoolean());
+        Assert.Equal(4, managed.GetProperty("concurrencyLimit").GetInt32());
+        Assert.DoesNotContain("password", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("token=", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("#fragment", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Admin_processor_endpoint_disable_removes_it_from_effective_worker_snapshot()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        await ResetProcessorEndpointTablesAsync();
+        var admin = await CreateAdminClientAsync(_factory);
+        var created = await CreateManagedProcessorEndpointAsync(
+            admin,
+            "https://processor-disable.local/recognize_json/",
+            concurrencyLimit: 2);
+        var endpointId = created.GetProperty("id").GetString();
+
+        using var patchRequest = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"/api/admin/processors/pdf2txt-http-recognizer/endpoints/{endpointId}");
+        patchRequest.Headers.Add("X-CSRF-Token", admin.CsrfToken);
+        patchRequest.Content = JsonContent.Create(new { Enabled = false });
+        var patched = await admin.Client.SendAsync(patchRequest);
+        var list = await admin.Client.GetAsync("/api/admin/processors/pdf2txt-http-recognizer/endpoints?capability=pdf-stamp-recognition");
+        var payload = await list.Content.ReadFromJsonAsync<JsonElement>();
+        var effective = payload.GetProperty("effectiveEndpoints").EnumerateArray().ToArray();
+
+        Assert.Equal(HttpStatusCode.OK, patched.StatusCode);
+        Assert.DoesNotContain(effective, endpoint =>
+            endpoint.GetProperty("endpoint").GetString() == "https://processor-disable.local/recognize_json/");
+    }
+
+    [Fact]
+    public async Task Admin_processor_endpoint_update_concurrency_changes_effective_worker_snapshot()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        await ResetProcessorEndpointTablesAsync();
+        var admin = await CreateAdminClientAsync(_factory);
+        var created = await CreateManagedProcessorEndpointAsync(
+            admin,
+            "https://processor-capacity.local/recognize_json/",
+            concurrencyLimit: 1);
+        var endpointId = created.GetProperty("id").GetString();
+
+        using var patchRequest = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"/api/admin/processors/pdf2txt-http-recognizer/endpoints/{endpointId}");
+        patchRequest.Headers.Add("X-CSRF-Token", admin.CsrfToken);
+        patchRequest.Content = JsonContent.Create(new { ConcurrencyLimit = 7, Priority = 5 });
+        var patched = await admin.Client.SendAsync(patchRequest);
+        var list = await admin.Client.GetAsync("/api/admin/processors/pdf2txt-http-recognizer/endpoints?capability=pdf-stamp-recognition");
+        var payload = await list.Content.ReadFromJsonAsync<JsonElement>();
+        var effective = payload.GetProperty("effectiveEndpoints").EnumerateArray().ToArray();
+        var endpoint = Assert.Single(effective, item =>
+            item.GetProperty("endpoint").GetString() == "https://processor-capacity.local/recognize_json/");
+
+        Assert.Equal(HttpStatusCode.OK, patched.StatusCode);
+        Assert.Equal(7, endpoint.GetProperty("concurrencyLimit").GetInt32());
+    }
+
+    [Fact]
+    public async Task Admin_processor_endpoint_check_requires_csrf_and_does_not_create_processing_job()
+    {
+        if (!HasConfiguredTestDatabase())
+        {
+            return;
+        }
+
+        await ResetProcessorEndpointTablesAsync();
+        await ResetProcessingTablesAsync();
+        var missingSamplePath = Path.Combine(Path.GetTempPath(), $"missing-check-sample-{Guid.NewGuid():N}.pdf");
+        using var factory = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["PdfStampRecognition:Diagnostics:SamplePdfPath"] = missingSamplePath
+                });
+            });
+        });
+        var admin = await CreateAdminClientAsync(factory);
+        var created = await CreateManagedProcessorEndpointAsync(
+            admin,
+            "https://user:password@processor-check.local/recognize_json/?token=hidden#fragment",
+            concurrencyLimit: 1);
+        var endpointId = created.GetProperty("id").GetString();
+        var beforeCount = await CountProcessingJobsAsync();
+
+        var withoutCsrf = await admin.Client.PostAsJsonAsync(
+            "/api/admin/processors/pdf2txt-http-recognizer/endpoint-checks",
+            new
+            {
+                Capability = PdfStampRecognitionConstants.Capability,
+                EndpointId = endpointId
+            });
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/admin/processors/pdf2txt-http-recognizer/endpoint-checks");
+        request.Headers.Add("X-CSRF-Token", admin.CsrfToken);
+        request.Content = JsonContent.Create(new
+        {
+            Capability = PdfStampRecognitionConstants.Capability,
+            EndpointId = endpointId
+        });
+        var response = await admin.Client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+        var payload = JsonSerializer.Deserialize<JsonElement>(body);
+        var afterCount = await CountProcessingJobsAsync();
+
+        Assert.Equal(HttpStatusCode.Forbidden, withoutCsrf.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("notConfigured", payload.GetProperty("status").GetString());
+        Assert.Equal("https://processor-check.local/recognize_json/", payload.GetProperty("endpoint").GetString());
+        Assert.Equal(beforeCount, afterCount);
+        Assert.DoesNotContain("password", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("token=", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("#fragment", body, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasConfiguredTestDatabase()
@@ -1303,6 +1535,70 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
 
         Environment.SetEnvironmentVariable("CENTERALES_PROCESSING_DATABASE", connectionString);
         return true;
+    }
+
+    private static async Task ResetProcessorEndpointTablesAsync()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString()
+            ?? throw new InvalidOperationException("Test database is not configured.");
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await using var connection = await dataSource.OpenConnectionAsync(CancellationToken.None);
+        await using var command = new NpgsqlCommand("""
+            truncate table processor_endpoints cascade;
+            """, connection);
+        await command.ExecuteNonQueryAsync(CancellationToken.None);
+    }
+
+    private static async Task ResetProcessingTablesAsync()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString()
+            ?? throw new InvalidOperationException("Test database is not configured.");
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+    }
+
+    private static async Task<int> CountProcessingJobsAsync()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString()
+            ?? throw new InvalidOperationException("Test database is not configured.");
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await using var connection = await dataSource.OpenConnectionAsync(CancellationToken.None);
+        await using var command = new NpgsqlCommand("select count(*) from processing_jobs;", connection);
+
+        return Convert.ToInt32(await command.ExecuteScalarAsync(CancellationToken.None));
+    }
+
+    private static async Task<JsonElement> CreateManagedProcessorEndpointAsync(
+        AdminTestSession admin,
+        string endpoint,
+        int concurrencyLimit)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/admin/processors/pdf2txt-http-recognizer/endpoints");
+        request.Headers.Add("X-CSRF-Token", admin.CsrfToken);
+        request.Content = JsonContent.Create(new
+        {
+            Capability = PdfStampRecognitionConstants.Capability,
+            Endpoint = endpoint,
+            ConcurrencyLimit = concurrencyLimit
+        });
+
+        var response = await admin.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
     private static async Task<HttpClient> CreateAuthorizedClientAsync(
@@ -1526,6 +1822,113 @@ public sealed class WebApiContractTests : IClassFixture<WebApplicationFactory<Pr
             CancellationToken.None);
 
         return new CompletedResultFixture(saved.ResultIndexId, enqueued.JobId, hash);
+    }
+
+    private static async Task CreateProcessorEndpointDistributionAsync()
+    {
+        var connectionString = IntegrationTestDatabase.TryReadConnectionString()
+            ?? throw new InvalidOperationException("Test database is not configured.");
+        var bootstrapper = new PostgresDatabaseBootstrapper();
+
+        await bootstrapper.EnsureDatabaseAsync(connectionString, CancellationToken.None);
+        await using var dataSource = NpgsqlDataSource.Create(connectionString);
+        await bootstrapper.ApplySchemaAsync(dataSource, CancellationToken.None);
+        await ResetProcessingTablesAsync(dataSource, CancellationToken.None);
+
+        var queue = new PostgresProcessingJobQueue(dataSource);
+        var heartbeatStore = new PostgresWorkerHeartbeatStore(dataSource);
+        var now = DateTimeOffset.UtcNow;
+
+        await CreateFinishedAttemptAsync(
+            queue,
+            $"sha256:{Guid.NewGuid():N}",
+            "https://user:secret@processor-a.local/recognize_json/?token=hidden",
+            now,
+            complete: true,
+            error: null);
+        await CreateFinishedAttemptAsync(
+            queue,
+            $"sha256:{Guid.NewGuid():N}",
+            "https://processor-b.local/recognize_json/",
+            now.AddSeconds(1),
+            complete: true,
+            error: null);
+        await CreateFinishedAttemptAsync(
+            queue,
+            $"sha256:{Guid.NewGuid():N}",
+            "https://user:secret@processor-a.local/recognize_json/?token=hidden",
+            now.AddSeconds(2),
+            complete: false,
+            error: NormalizedProcessorError.ProcessorTimeout);
+
+        await heartbeatStore.HeartbeatAsync(
+            new HeartbeatWorkerCommand(
+                $"distribution-worker-{Guid.NewGuid():N}",
+                PdfStampRecognitionConstants.ProcessorKey,
+                PdfStampRecognitionConstants.Capability,
+                now.AddMinutes(-1),
+                now.AddSeconds(3),
+                new[]
+                {
+                    new WorkerEndpointMetric(
+                        "https://processor-a.local/recognize_json/",
+                        Enabled: true,
+                        Health: "unknown",
+                        InFlight: 2,
+                        ConcurrencyLimit: 3)
+                }),
+            CancellationToken.None);
+    }
+
+    private static async Task CreateFinishedAttemptAsync(
+        PostgresProcessingJobQueue queue,
+        string hash,
+        string endpoint,
+        DateTimeOffset now,
+        bool complete,
+        NormalizedProcessorError? error)
+    {
+        await queue.EnqueueAsync(
+            new CreateProcessingJobCommand(
+                PdfStampRecognitionConstants.Capability,
+                hash,
+                $"temp/{Guid.NewGuid():N}.pdf",
+                now),
+            CancellationToken.None);
+        var claimed = await queue.ClaimNextAsync(now.AddMilliseconds(100), CancellationToken.None)
+            ?? throw new InvalidOperationException("Expected test job to be claimable.");
+
+        var diagnostics = new AttemptDiagnostics(
+            endpoint,
+            TimeSpan.FromMilliseconds(25),
+            error is null ? 200 : 504,
+            error,
+            error is null ? null : true,
+            $"corr-{Guid.NewGuid():N}",
+            error is null ? null : "Processor request timed out.");
+
+        if (complete)
+        {
+            await queue.CompleteAsync(
+                new CompleteProcessingJobCommand(
+                    claimed.JobId,
+                    claimed.SubjectId,
+                    Guid.NewGuid(),
+                    diagnostics,
+                    now.AddMilliseconds(200)),
+                CancellationToken.None);
+            return;
+        }
+
+        await queue.FailAsync(
+            new FailProcessingJobCommand(
+                claimed.JobId,
+                claimed.SubjectId,
+                error ?? NormalizedProcessorError.ProcessorHttpError,
+                Final: true,
+                diagnostics,
+                now.AddMilliseconds(200)),
+            CancellationToken.None);
     }
 
     private static async Task<Guid> CreateUnsupportedResultReferenceAsync()

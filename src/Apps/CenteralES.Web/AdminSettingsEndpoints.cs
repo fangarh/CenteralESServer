@@ -26,12 +26,7 @@ internal static class AdminSettingsEndpoints
             }
 
             var processorSection = configuration.GetSection("PdfStampRecognition:Processor");
-            var endpointPool = processorSection.GetSection("endpointPool")
-                .GetChildren()
-                .Select(value => value.Value)
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Select(value => SanitizeEndpoint(value!))
-                .ToArray();
+            var endpointPool = AdminProcessorConfiguration.GetSanitizedEndpointPool(configuration);
 
             return Results.Ok(new AdminSettingsResponse(
                 new AdminPublicApiSettingsResponse(settingsOptions.PdfMaxUploadBytes),
@@ -44,7 +39,7 @@ internal static class AdminSettingsEndpoints
                     PdfStampRecognitionConstants.ProcessorKey,
                     PdfStampRecognitionConstants.Capability,
                     ResolveString(configuration["PdfStampRecognition:Recognizer"], "Fake"),
-                    endpointPool.Length,
+                    endpointPool.Count,
                     endpointPool,
                     ResolvePositiveInt(processorSection["poolConcurrencyLimit"], DefaultHttpOptions.PoolConcurrencyLimit),
                     ResolvePositiveInt(processorSection["endpointConcurrencyLimit"], DefaultHttpOptions.EndpointConcurrencyLimit),
@@ -59,24 +54,6 @@ internal static class AdminSettingsEndpoints
                     Note: "MVP shows safe runtime configuration only. Editing and sensitive values are intentionally not exposed.")));
         })
             .WithName("AdminGetSettings");
-    }
-
-    private static string SanitizeEndpoint(string endpoint)
-    {
-        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri))
-        {
-            return "invalid-endpoint";
-        }
-
-        var builder = new UriBuilder(uri)
-        {
-            UserName = string.Empty,
-            Password = string.Empty,
-            Query = string.Empty,
-            Fragment = string.Empty
-        };
-
-        return builder.Uri.ToString();
     }
 
     private static string ResolveString(string? value, string fallback)

@@ -16,6 +16,12 @@ notepad .env.production
 ```text
 CENTERALES_POSTGRES_PASSWORD=<strong password>
 CENTERALES_PDF2TXT_ENDPOINT=https://<pdf2txt-host>/recognize_json/
+CENTERALES_PDF2TXT_ENDPOINT_1=https://<second-pdf2txt-host>/recognize_json/
+CENTERALES_PDF2TXT_PROXY_URL=
+CENTERALES_PDF2TXT_DISABLE_ENVIRONMENT_PROXY=false
+CENTERALES_PDF2TXT_DIAGNOSTIC_SAMPLE_PDF_PATH=
+CENTERALES_PDF2TXT_DIAGNOSTIC_CHECK_COOLDOWN=00:05:00
+CENTERALES_PDF2TXT_DIAGNOSTIC_CHECK_TIMEOUT=00:01:00
 CENTERALES_WEB_PORT=8080
 CENTERALES_ALLOWED_HOSTS=localhost;127.0.0.1
 ```
@@ -35,9 +41,17 @@ Production override принудительно задаёт:
 ```text
 PdfStampRecognition:Recognizer=Http
 PdfStampRecognition:Processor:endpointPool:0=<CENTERALES_PDF2TXT_ENDPOINT>
+PdfStampRecognition:Processor:endpointPool:1=<CENTERALES_PDF2TXT_ENDPOINT_1>
+PdfStampRecognition:Processor:proxyUrl=<CENTERALES_PDF2TXT_PROXY_URL>
+PdfStampRecognition:Processor:disableEnvironmentProxy=<CENTERALES_PDF2TXT_DISABLE_ENVIRONMENT_PROXY>
+PdfStampRecognition:Diagnostics:SamplePdfPath=<CENTERALES_PDF2TXT_DIAGNOSTIC_SAMPLE_PDF_PATH>
 ```
 
 Настройка применяется и к Web, и к Worker, чтобы Admin Settings/Services показывали тот же recognizer, которым реально пользуется Worker.
+`CENTERALES_PDF2TXT_ENDPOINT` обязателен. `CENTERALES_PDF2TXT_ENDPOINT_1..3` опциональны; пустые значения игнорируются Worker-ом. При нескольких endpoint-ах Worker выбирает endpoint по least in-flight внутри configured pool, а Admin Processor Details показывает recent endpoint distribution по сохранённым attempt diagnostics.
+Если среда запуска содержит нежелательные `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY`, задайте `CENTERALES_PDF2TXT_DISABLE_ENVIRONMENT_PROXY=true`. Если нужен явный корпоративный proxy, задайте `CENTERALES_PDF2TXT_PROXY_URL`; не задавайте оба режима одновременно.
+
+Admin Processor Details имеет ручную кнопку проверки endpoint-а. Она не участвует в health/readiness и не создаёт processing job. Чтобы включить её в production-like окружении, положите небольшой диагностический PDF внутрь доступного Web-контейнеру path и задайте `CENTERALES_PDF2TXT_DIAGNOSTIC_SAMPLE_PDF_PATH`. Если path пустой, кнопка вернёт `notConfigured`, внешний `pdf2txt` не будет вызван. Частота ограничивается `CENTERALES_PDF2TXT_DIAGNOSTIC_CHECK_COOLDOWN`.
 
 ## 3. Собрать и запустить
 

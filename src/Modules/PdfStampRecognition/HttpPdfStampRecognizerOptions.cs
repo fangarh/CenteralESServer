@@ -7,6 +7,8 @@ public sealed class HttpPdfStampRecognizerOptions
     public int EndpointConcurrencyLimit { get; init; } = 1;
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(30);
     public string ContractVersion { get; init; } = "pdf2txt-recognize-json-v1";
+    public string? ProxyUrl { get; init; }
+    public bool DisableEnvironmentProxy { get; init; }
 
     public void Validate()
     {
@@ -36,6 +38,17 @@ public sealed class HttpPdfStampRecognizerOptions
             {
                 throw new InvalidOperationException($"PdfStampRecognition processor endpoint '{endpoint}' must be an absolute URI.");
             }
+        }
+
+        if (!string.IsNullOrWhiteSpace(ProxyUrl)
+            && !Uri.TryCreate(ProxyUrl, UriKind.Absolute, out _))
+        {
+            throw new InvalidOperationException("PdfStampRecognition processor proxyUrl must be an absolute URI.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(ProxyUrl) && DisableEnvironmentProxy)
+        {
+            throw new InvalidOperationException("PdfStampRecognition processor proxyUrl cannot be combined with disableEnvironmentProxy.");
         }
     }
 }

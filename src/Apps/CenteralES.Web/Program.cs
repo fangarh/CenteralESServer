@@ -1,3 +1,4 @@
+using System.Net;
 using CenteralES.AccessControl;
 using CenteralES.Admin;
 using CenteralES.Infrastructure.AccessControl;
@@ -21,6 +22,7 @@ var processingDatabaseConnectionString = PostgresDatabaseConnectionStringResolve
 var temporaryStorageRoot = TemporaryStorageRootResolver.Resolve(builder.Configuration["Storage:TemporaryRoot"]);
 var temporaryStorageLimits = ResolveTemporaryStorageLimits(builder.Configuration);
 var pdfMaxUploadBytes = ResolvePdfMaxUploadBytes(builder.Configuration);
+var endpointCheckOptions = ResolvePdfStampRecognitionEndpointCheckOptions(builder.Configuration);
 var autoBootstrapDatabase = ShouldAutoBootstrapDatabase(builder.Configuration, builder.Environment);
 if (autoBootstrapDatabase)
 {
@@ -44,6 +46,8 @@ builder.Services.AddSingleton(new AdminStorageOptions(temporaryStorageRoot));
 builder.Services.AddSingleton(new AdminSettingsOptions(pdfMaxUploadBytes, temporaryStorageRoot, temporaryStorageLimits));
 builder.Services.AddSingleton<PostgresAdminProcessorReadStore>();
 builder.Services.AddSingleton<IAdminProcessorReadStore>(services => services.GetRequiredService<PostgresAdminProcessorReadStore>());
+builder.Services.AddSingleton<PostgresProcessorEndpointStore>();
+builder.Services.AddSingleton<IAdminProcessorEndpointStore>(services => services.GetRequiredService<PostgresProcessorEndpointStore>());
 builder.Services.AddSingleton<PostgresAdminJobReadStore>();
 builder.Services.AddSingleton<IAdminJobReadStore>(services => services.GetRequiredService<PostgresAdminJobReadStore>());
 builder.Services.AddSingleton<PostgresAdminAuditReadStore>();
@@ -54,6 +58,18 @@ builder.Services.AddSingleton<IAdminProcessingReadStore, PostgresAdminProcessing
 builder.Services.AddSingleton<IAdminProcessingActionStore, PostgresAdminProcessingActionStore>();
 builder.Services.AddSingleton<IAdminApiKeyStore, PostgresAdminApiKeyStore>();
 builder.Services.AddSingleton<IAdminUserStore, PostgresAdminUserStore>();
+builder.Services.AddSingleton(endpointCheckOptions);
+builder.Services.AddSingleton(new AdminProcessorEndpointCheckPolicy(ResolveProcessorEndpointCheckCooldown(builder.Configuration)));
+builder.Services.AddSingleton<PdfStampRecognitionEndpointChecker>();
+builder.Services.AddSingleton<AdminProcessorEndpointCheckLimiter>();
+var endpointCheckHttpClient = builder.Services.AddHttpClient(PdfStampRecognitionEndpointChecker.HttpClientName);
+var processorProxyUrl = builder.Configuration["PdfStampRecognition:Processor:proxyUrl"];
+var disableEnvironmentProxy = ReadBool(builder.Configuration, "PdfStampRecognition:Processor:disableEnvironmentProxy", false);
+if (!string.IsNullOrWhiteSpace(processorProxyUrl) || disableEnvironmentProxy)
+{
+    endpointCheckHttpClient.ConfigurePrimaryHttpMessageHandler(() =>
+        CreateProcessorHttpMessageHandler(processorProxyUrl, disableEnvironmentProxy));
+}
 
 var app = builder.Build();
 
@@ -135,6 +151,66 @@ static long ResolvePdfMaxUploadBytes(IConfiguration configuration)
     }
 
     return value;
+}
+
+static PdfStampRecognitionEndpointCheckOptions ResolvePdfStampRecognitionEndpointCheckOptions(IConfiguration configuration)
+{
+    return new PdfStampRecognitionEndpointCheckOptions(
+        configuration["PdfStampRecognition:Diagnostics:SamplePdfPath"],
+        ResolveOptionalTimeSpan(configuration, "PdfStampRecognition:Diagnostics:EndpointCheckTimeout") ?? TimeSpan.FromSeconds(60));
+}
+
+static TimeSpan ResolveProcessorEndpointCheckCooldown(IConfiguration configuration)
+{
+    return ResolveOptionalTimeSpan(configuration, "PdfStampRecognition:Diagnostics:EndpointCheckCooldown")
+        ?? TimeSpan.FromMinutes(5);
+}
+
+static TimeSpan? ResolveOptionalTimeSpan(IConfiguration configuration, string key)
+{
+    var configured = configuration[key];
+    if (string.IsNullOrWhiteSpace(configured))
+    {
+        return null;
+    }
+
+    if (TimeSpan.TryParse(configured, out var value) && value > TimeSpan.Zero)
+    {
+        return value;
+    }
+
+    if (int.TryParse(configured, out var seconds) && seconds > 0)
+    {
+        return TimeSpan.FromSeconds(seconds);
+    }
+
+    throw new InvalidOperationException($"Configuration value {key} must be a positive TimeSpan or number of seconds.");
+}
+
+static HttpMessageHandler CreateProcessorHttpMessageHandler(string? proxyUrl, bool disableEnvironmentProxy)
+{
+    var handler = new HttpClientHandler();
+    if (!string.IsNullOrWhiteSpace(proxyUrl))
+    {
+        handler.UseProxy = true;
+        handler.Proxy = new WebProxy(proxyUrl);
+        return handler;
+    }
+
+    if (disableEnvironmentProxy)
+    {
+        handler.UseProxy = false;
+    }
+
+    return handler;
+}
+
+static bool ReadBool(IConfiguration configuration, string key, bool defaultValue)
+{
+    var configured = configuration[key];
+    return bool.TryParse(configured, out var value)
+        ? value
+        : defaultValue;
 }
 
 static bool ShouldAutoBootstrapDatabase(IConfiguration configuration, IHostEnvironment environment)

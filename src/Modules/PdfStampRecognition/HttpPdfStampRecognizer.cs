@@ -138,7 +138,7 @@ public sealed class HttpPdfStampRecognizer : IPdfStampRecognizer
                 stopwatch.Elapsed,
                 httpStatus: null,
                 correlationId,
-                "Processor request failed before receiving an HTTP response.",
+                CreateNetworkFailureExcerpt(ex),
                 "Processor request failed before receiving an HTTP response.",
                 ex);
         }
@@ -237,5 +237,28 @@ public sealed class HttpPdfStampRecognizer : IPdfStampRecognizer
                 rawErrorExcerpt),
             message,
             innerException);
+    }
+
+    private static string CreateNetworkFailureExcerpt(HttpRequestException exception)
+    {
+        Exception root = exception;
+        while (root.InnerException is not null)
+        {
+            root = root.InnerException;
+        }
+
+        var message = string.IsNullOrWhiteSpace(root.Message)
+            ? exception.Message
+            : root.Message;
+
+        return TrimDiagnostic($"Processor request failed before receiving an HTTP response. Root={root.GetType().Name}: {message}");
+    }
+
+    private static string TrimDiagnostic(string value)
+    {
+        const int maxLength = 500;
+        return value.Length <= maxLength
+            ? value
+            : value[..maxLength];
     }
 }

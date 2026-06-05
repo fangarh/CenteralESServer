@@ -3,8 +3,21 @@ services:
     environment:
       PdfStampRecognition__Recognizer: Http
       PdfStampRecognition__Processor__endpointPool__0: ${CENTERALES_PDF2TXT_ENDPOINT:?Set CENTERALES_PDF2TXT_ENDPOINT in .env.production or environment}
+      PdfStampRecognition__Processor__endpointPool__1: ${CENTERALES_PDF2TXT_ENDPOINT_1:-}
+      PdfStampRecognition__Processor__endpointPool__2: ${CENTERALES_PDF2TXT_ENDPOINT_2:-}
+      PdfStampRecognition__Processor__endpointPool__3: ${CENTERALES_PDF2TXT_ENDPOINT_3:-}
+      PdfStampRecognition__Processor__proxyUrl: ${CENTERALES_PDF2TXT_PROXY_URL:-}
+      PdfStampRecognition__Processor__disableEnvironmentProxy: ${CENTERALES_PDF2TXT_DISABLE_ENVIRONMENT_PROXY:-false}
+      PdfStampRecognition__Diagnostics__SamplePdfPath: ${CENTERALES_PDF2TXT_DIAGNOSTIC_SAMPLE_PDF_PATH:-}
+      PdfStampRecognition__Diagnostics__EndpointCheckCooldown: ${CENTERALES_PDF2TXT_DIAGNOSTIC_CHECK_COOLDOWN:-00:05:00}
+      PdfStampRecognition__Diagnostics__EndpointCheckTimeout: ${CENTERALES_PDF2TXT_DIAGNOSTIC_CHECK_TIMEOUT:-00:01:00}
 
   worker:
     environment:
       PdfStampRecognition__Recognizer: Http
       PdfStampRecognition__Processor__endpointPool__0: ${CENTERALES_PDF2TXT_ENDPOINT:?Set CENTERALES_PDF2TXT_ENDPOINT in .env.production or environment}
+      PdfStampRecognition__Processor__endpointPool__1: ${CENTERALES_PDF2TXT_ENDPOINT_1:-}
+      PdfStampRecognition__Processor__endpointPool__2: ${CENTERALES_PDF2TXT_ENDPOINT_2:-}
+      PdfStampRecognition__Processor__endpointPool__3: ${CENTERALES_PDF2TXT_ENDPOINT_3:-}
+      PdfStampRecognition__Processor__proxyUrl: ${CENTERALES_PDF2TXT_PROXY_URL:-}
+      PdfStampRecognition__Processor__disableEnvironmentProxy: ${CENTERALES_PDF2TXT_DISABLE_ENVIRONMENT_PROXY:-false}

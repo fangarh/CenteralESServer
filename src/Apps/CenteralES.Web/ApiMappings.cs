@@ -62,7 +62,7 @@ internal static class ApiMappings
             job.CreatedAt,
             job.StartedAt,
             job.FinishedAt,
-            job.Endpoint,
+            SanitizeOptionalEndpoint(job.Endpoint),
             job.NormalizedError?.ToString(),
             job.Retryable,
             job.CorrelationId);
@@ -85,7 +85,7 @@ internal static class ApiMappings
             job.CreatedAt,
             job.UpdatedAt,
             new AdminAttemptDiagnosticsResponse(
-                job.Endpoint,
+                SanitizeOptionalEndpoint(job.Endpoint),
                 job.Duration?.TotalMilliseconds,
                 job.HttpStatus,
                 job.NormalizedError?.ToString(),
@@ -111,7 +111,7 @@ internal static class ApiMappings
             report.FinishedAt,
             report.HeartbeatAt,
             new AdminJobSupportReportDiagnosticsResponse(
-                report.Diagnostics.Endpoint,
+                SanitizeOptionalEndpoint(report.Diagnostics.Endpoint),
                 report.Diagnostics.Duration?.TotalMilliseconds,
                 report.Diagnostics.HttpStatus,
                 report.Diagnostics.NormalizedError?.ToString(),
@@ -142,7 +142,7 @@ internal static class ApiMappings
             attempt.CreatedAt,
             attempt.StartedAt,
             attempt.FinishedAt,
-            attempt.Endpoint,
+            SanitizeOptionalEndpoint(attempt.Endpoint),
             attempt.Duration?.TotalMilliseconds,
             attempt.HttpStatus,
             attempt.NormalizedError?.ToString(),
@@ -263,7 +263,9 @@ internal static class ApiMappings
             success.AuditId.ToString("N"));
     }
 
-    public static AdminProcessorStatusResponse ToAdminProcessorStatusResponse(AdminProcessorStatus status)
+    public static AdminProcessorStatusResponse ToAdminProcessorStatusResponse(
+        AdminProcessorStatus status,
+        IReadOnlyList<string>? configuredEndpoints = null)
     {
         return new AdminProcessorStatusResponse(
             status.ProcessorKey,
@@ -278,7 +280,158 @@ internal static class ApiMappings
                 status.Queue.Blocked,
                 status.Queue.Cancelled),
             status.Workers.Select(ToAdminProcessorWorkerStatusResponse).ToArray(),
+            ToAdminProcessorEndpointDistributionResponses(
+                status.EndpointDistribution,
+                status.EndpointRuntimes,
+                configuredEndpoints ?? Array.Empty<string>()),
             status.RecentDiagnostics.Select(ToAdminProcessorRecentDiagnosticResponse).ToArray());
+    }
+
+    private static IReadOnlyList<AdminProcessorEndpointDistributionResponse> ToAdminProcessorEndpointDistributionResponses(
+        IReadOnlyList<AdminProcessorEndpointDistribution> observedEndpoints,
+        IReadOnlyList<AdminProcessorEndpointRuntime> endpointRuntimes,
+        IReadOnlyList<string> configuredEndpoints)
+    {
+        var configured = configuredEndpoints
+            .Where(endpoint => !string.IsNullOrWhiteSpace(endpoint))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var configuredSet = configured.ToHashSet(StringComparer.Ordinal);
+        var byEndpoint = observedEndpoints
+            .GroupBy(endpoint => AdminProcessorConfiguration.SanitizeEndpoint(endpoint.Endpoint), StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group =>
+                {
+                    var items = group.ToArray();
+                    var latest = items
+                        .Where(item => item.LastSeenAt is not null)
+                        .OrderByDescending(item => item.LastSeenAt)
+                        .FirstOrDefault();
+
+                    return new AdminProcessorEndpointDistributionResponse(
+                        group.Key,
+                        configuredSet.Contains(group.Key),
+                        items.Sum(item => item.RecentAttempts),
+                        items.Sum(item => item.Completed),
+                        items.Sum(item => item.Failed),
+                        items.Sum(item => item.Blocked),
+                        items.Sum(item => item.RetryableFailures),
+                        ActiveProcessing: 0,
+                        UtilizationPercent: 0,
+                        AverageDurationMs: AverageOrNull(items.Select(item => item.AverageDurationMs)),
+                        P95DurationMs: MaxOrNull(items.Select(item => item.P95DurationMs)),
+                        MaxDurationMs: MaxOrNull(items.Select(item => item.MaxDurationMs)),
+                        LastDurationMs: latest?.LastDurationMs,
+                        CompletedPerMinute: items.Sum(item => item.CompletedPerMinute),
+                        LiveWorkerCount: 0,
+                        StaleWorkerCount: 0,
+                        InFlight: 0,
+                        ConcurrencyLimit: 0,
+                        RuntimeHealth: "unknown",
+                        LastHeartbeatAt: null,
+                        latest?.LastHttpStatus,
+                        latest?.LastNormalizedError?.ToString(),
+                        latest?.LastSeenAt);
+                },
+                StringComparer.Ordinal);
+        var runtimeByEndpoint = endpointRuntimes
+            .GroupBy(endpoint => AdminProcessorConfiguration.SanitizeEndpoint(endpoint.Endpoint), StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group =>
+                {
+                    var items = group.ToArray();
+                    var latest = items
+                        .Where(item => item.LastHeartbeatAt is not null)
+                        .OrderByDescending(item => item.LastHeartbeatAt)
+                        .FirstOrDefault();
+
+                    return new
+                    {
+                        LiveWorkerCount = items.Sum(item => item.LiveWorkerCount),
+                        StaleWorkerCount = items.Sum(item => item.StaleWorkerCount),
+                        InFlight = items.Sum(item => item.InFlight),
+                        ConcurrencyLimit = items.Sum(item => item.ConcurrencyLimit),
+                        Health = latest?.Health ?? "unknown",
+                        LastHeartbeatAt = latest?.LastHeartbeatAt
+                    };
+                },
+                StringComparer.Ordinal);
+        var allEndpointKeys = configured
+            .Concat(byEndpoint.Keys)
+            .Concat(runtimeByEndpoint.Keys)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var endpoints = new List<AdminProcessorEndpointDistributionResponse>();
+        foreach (var endpoint in allEndpointKeys)
+        {
+            byEndpoint.TryGetValue(endpoint, out var observed);
+            runtimeByEndpoint.TryGetValue(endpoint, out var runtime);
+
+            endpoints.Add(new AdminProcessorEndpointDistributionResponse(
+                endpoint,
+                Configured: configuredSet.Contains(endpoint),
+                observed?.RecentAttempts ?? 0,
+                observed?.Completed ?? 0,
+                observed?.Failed ?? 0,
+                observed?.Blocked ?? 0,
+                observed?.RetryableFailures ?? 0,
+                ActiveProcessing: runtime?.InFlight ?? 0,
+                UtilizationPercent: CalculateUtilizationPercent(runtime?.InFlight ?? 0, runtime?.ConcurrencyLimit ?? 0),
+                observed?.AverageDurationMs,
+                observed?.P95DurationMs,
+                observed?.MaxDurationMs,
+                observed?.LastDurationMs,
+                observed?.CompletedPerMinute ?? 0,
+                runtime?.LiveWorkerCount ?? 0,
+                runtime?.StaleWorkerCount ?? 0,
+                runtime?.InFlight ?? 0,
+                runtime?.ConcurrencyLimit ?? 0,
+                runtime?.Health ?? "unknown",
+                runtime?.LastHeartbeatAt,
+                observed?.LastHttpStatus,
+                observed?.LastNormalizedError,
+                observed?.LastSeenAt));
+        }
+
+        return endpoints
+            .OrderBy(endpoint => endpoint.Configured ? 0 : 1)
+            .ThenByDescending(endpoint => endpoint.LiveWorkerCount)
+            .ThenByDescending(endpoint => endpoint.RecentAttempts)
+            .ThenBy(endpoint => endpoint.Endpoint, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static int CalculateUtilizationPercent(int inFlight, int concurrencyLimit)
+    {
+        if (inFlight <= 0 || concurrencyLimit <= 0)
+        {
+            return 0;
+        }
+
+        return (int)Math.Round(inFlight * 100d / concurrencyLimit, MidpointRounding.AwayFromZero);
+    }
+
+    private static double? AverageOrNull(IEnumerable<double?> values)
+    {
+        var materialized = values
+            .Where(value => value is not null)
+            .Select(value => value!.Value)
+            .ToArray();
+
+        return materialized.Length == 0 ? null : materialized.Average();
+    }
+
+    private static double? MaxOrNull(IEnumerable<double?> values)
+    {
+        var materialized = values
+            .Where(value => value is not null)
+            .Select(value => value!.Value)
+            .ToArray();
+
+        return materialized.Length == 0 ? null : materialized.Max();
     }
 
     public static AdminProcessorWorkerStatusResponse ToAdminProcessorWorkerStatusResponse(AdminProcessorWorkerStatus worker)
@@ -296,12 +449,67 @@ internal static class ApiMappings
             diagnostic.JobId.ToString("N"),
             diagnostic.AttemptNumber,
             ToPublicStatus(diagnostic.Status),
-            diagnostic.Endpoint,
+            SanitizeOptionalEndpoint(diagnostic.Endpoint),
             diagnostic.HttpStatus,
             diagnostic.NormalizedError?.ToString(),
             diagnostic.Retryable,
             diagnostic.CorrelationId,
             diagnostic.CreatedAt);
+    }
+
+    public static AdminProcessorEndpointResponse ToAdminProcessorEndpointResponse(AdminProcessorEndpointListItem endpoint)
+    {
+        return new AdminProcessorEndpointResponse(
+            endpoint.Id?.ToString("N"),
+            endpoint.ProcessorKey,
+            endpoint.Capability,
+            AdminProcessorConfiguration.SanitizeEndpoint(endpoint.Endpoint),
+            endpoint.Enabled,
+            endpoint.ConcurrencyLimit,
+            endpoint.Priority,
+            endpoint.Source,
+            endpoint.CreatedAt,
+            endpoint.UpdatedAt,
+            endpoint.DisabledAt);
+    }
+
+    public static AdminProcessorEffectiveEndpointResponse ToAdminProcessorEffectiveEndpointResponse(
+        ProcessorEndpointConfiguration endpoint)
+    {
+        return new AdminProcessorEffectiveEndpointResponse(
+            AdminProcessorConfiguration.SanitizeEndpoint(endpoint.Endpoint),
+            endpoint.ConcurrencyLimit,
+            endpoint.Source);
+    }
+
+    public static AdminProcessorEndpointCheckResponse ToAdminProcessorEndpointCheckResponse(
+        PdfStampRecognitionEndpointCheckResult check,
+        DateTimeOffset? nextAllowedAt)
+    {
+        return new AdminProcessorEndpointCheckResponse(
+            check.Status switch
+            {
+                PdfStampRecognitionEndpointCheckStatus.Succeeded => "succeeded",
+                PdfStampRecognitionEndpointCheckStatus.Failed => "failed",
+                PdfStampRecognitionEndpointCheckStatus.NotConfigured => "notConfigured",
+                _ => "unknown"
+            },
+            check.Endpoint,
+            check.CheckedAt,
+            check.Duration?.TotalMilliseconds,
+            check.HttpStatus,
+            check.NormalizedError?.ToString(),
+            check.Retryable,
+            check.ResponseSizeBytes,
+            check.RawResponseExcerpt,
+            nextAllowedAt);
+    }
+
+    private static string? SanitizeOptionalEndpoint(string? endpoint)
+    {
+        return string.IsNullOrWhiteSpace(endpoint)
+            ? endpoint
+            : AdminProcessorConfiguration.SanitizeEndpoint(endpoint);
     }
 
     public static AdminUserResponse ToAdminUserResponse(AdminPrincipal principal)

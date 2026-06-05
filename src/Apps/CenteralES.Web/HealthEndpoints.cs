@@ -89,29 +89,34 @@ internal static class HealthEndpoints
         ITemporaryStorageMonitor temporaryStorageMonitor,
         CancellationToken cancellationToken)
     {
-        var key = $".health/ready-{Guid.NewGuid():N}.tmp";
+        var key = $".health/ready-{Guid.NewGuid():N}.probe";
+        var stage = "save";
 
         try
         {
             await using var content = new MemoryStream("ok"u8.ToArray());
             await temporaryFileStore.SaveAsync(key, content, cancellationToken);
+            stage = "open";
             await using (var saved = await temporaryFileStore.OpenReadAsync(key, cancellationToken))
             {
                 _ = saved.ReadByte();
             }
 
+            stage = "delete";
             await temporaryFileStore.DeleteIfExistsAsync(key, cancellationToken);
+            stage = "capacity";
             var capacity = await temporaryStorageMonitor.CheckCapacityAsync(
                 new TemporaryStorageCapacityRequest(0),
                 cancellationToken);
 
             return new HealthCheckItemResponse(
                 "temporaryStorage",
-                capacity.Status is TemporaryStorageCapacityStatus.Full ? "unhealthy" : "healthy");
+                capacity.Status is TemporaryStorageCapacityStatus.Full ? "unhealthy" : "healthy",
+                capacity.Status is TemporaryStorageCapacityStatus.Full ? "capacity:full" : null);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new HealthCheckItemResponse("temporaryStorage", "unhealthy");
+            return new HealthCheckItemResponse("temporaryStorage", "unhealthy", $"{stage}:{ex.GetType().Name}");
         }
     }
 }

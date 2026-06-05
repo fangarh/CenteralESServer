@@ -29,6 +29,28 @@ public sealed class LocalTemporaryFileStoreTests : IDisposable
         await Assert.ThrowsAsync<FileNotFoundException>(() => store.OpenReadAsync("incoming/test.pdf", CancellationToken.None));
     }
 
+    [Fact]
+    public async Task Save_open_and_delete_roundtrip_cleans_health_probe_key()
+    {
+        var store = new LocalTemporaryFileStore(_rootPath);
+        var key = $".health/ready-{Guid.NewGuid():N}.probe";
+        await using var input = new MemoryStream(Encoding.UTF8.GetBytes("ok"));
+
+        await store.SaveAsync(key, input, CancellationToken.None);
+        await using (var output = await store.OpenReadAsync(key, CancellationToken.None))
+        {
+            Assert.Equal((byte)'o', output.ReadByte());
+        }
+
+        await store.DeleteIfExistsAsync(key, CancellationToken.None);
+
+        var healthDirectory = Path.Combine(_rootPath, ".health");
+        var leftovers = Directory.Exists(healthDirectory)
+            ? Directory.EnumerateFiles(healthDirectory).ToArray()
+            : Array.Empty<string>();
+        Assert.Empty(leftovers);
+    }
+
     [Theory]
     [InlineData("../outside.pdf")]
     [InlineData("incoming/../../outside.pdf")]

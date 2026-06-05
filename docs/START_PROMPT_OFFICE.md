@@ -7,8 +7,9 @@
 
 Репозиторий: D:\Projects\2026\CenteralESServer
 GitHub: https://github.com/fangarh/CenteralESServer.git
-Текущий последний git checkpoint: 24f212f Fix source audit remediation tails
-Дата handoff: 2026-06-03
+Текущий последний git checkpoint: e557142 Update Obsidian MVP release notes
+Release tag: v0.1.0-mvp
+Дата handoff: 2026-06-05
 
 Работай по-русски. Не выводи секреты из db.env. db.env и test.pdf должны оставаться ignored. Не используй Entity Framework: только явный SQL/Npgsql. Используй локальный .NET SDK:
 
@@ -17,7 +18,7 @@ C:\Users\Admin\.dotnet\dotnet.exe
 Перед продолжением:
 1. Перейди в D:\Projects\2026\CenteralESServer.
 2. Выполни git status --short.
-3. Проверь git log -1 --oneline. Если последним коммитом является handoff commit, проверь, что в истории есть checkpoint `24f212f Fix source audit remediation tails`.
+3. Проверь git log -1 --oneline. Проверь, что local tag `v0.1.0-mvp` указывает на текущий release checkpoint.
 4. Проверь, что db.env игнорируется: git check-ignore -v db.env.
 5. Проверь, что test.pdf игнорируется: git check-ignore -v test.pdf.
 6. Прочитай:
@@ -33,8 +34,11 @@ C:\Users\Admin\.dotnet\dotnet.exe
    - ESServer/05 Данные и хранение/Файлы и Storage.md
 
 Текущий статус:
+- MVP v0.1.0 release gate complete; local tag `v0.1.0-mvp` создан.
 - Phase 1 backend checkpoint complete.
-- Phase 2 in progress: Security, Retry, Health, Admin Actions.
+- Phase 2 Security/Retry/Health/Admin Actions complete.
+- Phase 3 Docker Compose Delivery MVP complete.
+- Phase 4 Admin MVP baseline mostly implemented; remaining work is post-MVP polish/backlog.
 - Public PDF flow работает: upload -> PostgreSQL queue -> Worker -> pdf2txt adapter -> result/status.
 - Public API защищен API key: Authorization: ApiKey <keyId>.<secret>.
 - Admin API защищен session cookie; state-changing Admin endpoint-ы требуют X-CSRF-Token.
@@ -59,6 +63,6 @@ C:\Users\Admin\.dotnet\dotnet.exe
 - Scripted release smoke прошёл: production-like project `centerales-release-smoke` был поднят с ignored `.env.production`, admin подготовлен из ignored `logon.env`, Public API key создан через Admin API с session/CSRF, `scripts/run-release-smoke.ps1 -SkipBuild` вернул `SMOKE_OK_RELEASE`, `status=completed`, `contract=pdf2txt-recognize-json-v1`; stack остановлен, контейнеров не осталось.
 
 Следующий логичный шаг:
-1. Если release blockers не найдены, создать MVP tag.
-2. Затем выбрать следующий backlog item: refactor `PostgresProcessingJobQueue` или полировка Admin MVP.
+1. Выбрать следующий backlog item: refactor `PostgresProcessingJobQueue` или полировка Admin MVP.
+2. Для release housekeeping можно подготовить GitHub release notes.
 ```

@@ -152,6 +152,8 @@ public sealed record AdminProcessorStatus(
     string Health,
     AdminProcessorQueueCounts Queue,
     IReadOnlyList<AdminProcessorWorkerStatus> Workers,
+    IReadOnlyList<AdminProcessorEndpointRuntime> EndpointRuntimes,
+    IReadOnlyList<AdminProcessorEndpointDistribution> EndpointDistribution,
     IReadOnlyList<AdminProcessorRecentDiagnostic> RecentDiagnostics);
 
 public sealed record AdminProcessorQueueCounts(
@@ -173,6 +175,31 @@ public sealed record AdminProcessorRecentDiagnostic(
     bool? Retryable,
     string CorrelationId,
     DateTimeOffset CreatedAt);
+
+public sealed record AdminProcessorEndpointDistribution(
+    string Endpoint,
+    int RecentAttempts,
+    int Completed,
+    int Failed,
+    int Blocked,
+    int RetryableFailures,
+    double? AverageDurationMs,
+    double? P95DurationMs,
+    double? MaxDurationMs,
+    double? LastDurationMs,
+    double CompletedPerMinute,
+    int? LastHttpStatus,
+    NormalizedProcessorError? LastNormalizedError,
+    DateTimeOffset? LastSeenAt);
+
+public sealed record AdminProcessorEndpointRuntime(
+    string Endpoint,
+    int LiveWorkerCount,
+    int StaleWorkerCount,
+    int InFlight,
+    int ConcurrencyLimit,
+    string Health,
+    DateTimeOffset? LastHeartbeatAt);
 
 public sealed record AdminProcessorWorkerStatus(
     string WorkerId,

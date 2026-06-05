@@ -38,6 +38,7 @@
 
 - [x] **PDF-01**: Фактический JSON-контракт `pdf2txt` зафиксирован discovery-задачей.
 - [x] **PDF-02**: Adapter вызывает `pdf2txt` через выбранный endpoint из endpoint pool.
+- [x] **PDF-03**: Worker HTTP adapter поддерживает явную proxy-конфигурацию или отключение inherited environment proxy и пишет безопасную root-cause диагностику для pre-HTTP network failures.
 - [x] **PDF-03**: Endpoint selection MVP использует `least in-flight`.
 - [x] **PDF-04**: Endpoint и diagnostics сохраняются в истории attempt.
 - [x] **PDF-05**: `InvalidInputProbe` включается только если discovery подтвердит безопасный validation response.
@@ -63,6 +64,8 @@
 - [x] **ADMIN-08**: Admin API предоставляет read-only registry зарегистрированных MVP-сервисов без секретов, connection strings и активного вызова внешних processor-ов.
 - [x] **ADMIN-09**: Admin Result Details имеет отдельный controlled debug endpoint/download для raw JSON payload с auth, table allowlist и size limit.
 - [x] **ADMIN-10**: Admin Storage/Settings показывают read-only retention policy MVP без запуска cleanup, dry-run или ручного удаления.
+- [x] **ADMIN-11**: Admin Processor Details показывает passive realtime endpoint load, utilization, latency и throughput без вызова внешнего processor-а.
+- [x] **ADMIN-12**: Admin Processor Details поддерживает ручную diagnostic-проверку configured pdf2txt endpoint-а по кнопке с sample PDF, CSRF, cooldown, sanitized response и без создания processing job.
 - [x] **HEALTH-01**: Web предоставляет `/health/live` и `/health/ready`.
 - [x] **HEALTH-02**: Worker пишет heartbeat каждые `30 seconds`, stale threshold `3 minutes`.
 
@@ -132,16 +135,18 @@
 | ADMIN-08 | Phase 2 | Done: `GET /api/admin/services` returns safe registered service metadata for `pdf-stamp-recognition / pdf2txt-http-recognizer` |
 | ADMIN-09 | Phase 4 | Done: `GET /api/admin/results/{resultIndexId}/payload` exposes controlled raw JSON debug payload for supported PDF results only |
 | ADMIN-10 | Phase 4 | Done: `/api/admin/storage`, `/api/admin/settings`, and Admin UI expose read-only retention policy visibility |
+| ADMIN-11 | Phase 4 | Done: Admin Processor Details shows passive endpoint load/latency/throughput using Worker heartbeat and attempt diagnostics without external diagnostic calls |
+| ADMIN-12 | Phase 4 | Done: `POST /api/admin/processors/pdf2txt-http-recognizer/endpoint-checks` powers a manual per-endpoint diagnostic button with configured sample PDF, CSRF, cooldown, sanitized response, and no processing job creation |
 | HEALTH-01 | Phase 2 | Done: Web endpoints plus Admin UI Health screen |
 | HEALTH-02 | Phase 2 | Done |
 | DEPLOY-01 | Phase 3 | Done: Docker Desktop runtime validation passed with real `pdf2txt`; release workflow now includes `compose.prod.yaml`, `.env.production.example`, `scripts/run-release-smoke.ps1`, and `docs/RELEASE_RUNBOOK.md` for repeatable production-like validation without fake recognizer; artifacts verified with Compose config/build, full .NET build/test, and scripted release smoke using an Admin API-created Public API key |
 | DEPLOY-02 | Phase 3 | Done: `compose.yaml` includes PostgreSQL, one-shot migrator, Web, Worker, shared temporary storage volume, explicit DB password requirement, non-root final images, demo-only `Fake` recognizer default, and production override forces `Http` recognizer plus endpoint for both Web and Worker |
 
 **Coverage:**
-- v1 requirements: 42 total
-- Mapped to phases: 42
+- v1 requirements: 43 total
+- Mapped to phases: 43
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-03 after scripted release smoke*
+*Last updated: 2026-06-05 after Admin manual endpoint diagnostic checkpoint*

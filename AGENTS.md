@@ -13,8 +13,9 @@ D:\Projects\2026\CenteralESServer
 ## Обязательные правила
 
 - Отвечай пользователю по-русски.
-- Не выводи секреты из `db.env`.
-- `db.env`, `.codex-local/` и `test.pdf` должны оставаться ignored.
+- Не выводи секреты из `db.env` и `logon.env`.
+- `db.env`, `logon.env`, `.codex-local/` и `test.pdf` должны оставаться ignored.
+- Для основной локальной учётки Admin использовать ignored `logon.env` как источник истины; при обновлении БД синхронизировать login/password из него и не hardcode-ить значения.
 - Не использовать Entity Framework. Только явный SQL/Npgsql.
 - Использовать локальный SDK: `C:\Users\Admin\.dotnet\dotnet.exe`.
 - Перед кодом читать существующие паттерны в `src`, `tests`, `ESServer`, `.planning`.
@@ -80,4 +81,3 @@ Phase 2 продолжается после checkpoint `516d691 Add temporary st
 - Support report MVP для Job Details.
 - Read API для audit/admin visibility.
 - Затем Docker Compose delivery MVP.
-

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using CenteralES.PdfStampRecognition;
 using CenteralES.Processing;
@@ -86,6 +87,24 @@ public sealed class HttpPdfStampRecognizerTests
     }
 
     [Fact]
+    public async Task RecognizeAsync_preserves_safe_network_failure_detail()
+    {
+        var handler = new RecordingHttpMessageHandler((_, _) =>
+            throw new HttpRequestException(
+                "Connection failed.",
+                new SocketException((int)SocketError.ConnectionRefused)));
+        var recognizer = CreateRecognizer(handler);
+
+        await using var pdf = new MemoryStream(Encoding.UTF8.GetBytes("%PDF network"));
+        var exception = await Assert.ThrowsAsync<PdfStampRecognitionAdapterException>(
+            () => recognizer.RecognizeAsync(CreateJob(), pdf, CancellationToken.None));
+
+        Assert.Equal(NormalizedProcessorError.ProcessorUnreachable, exception.Error);
+        Assert.Contains("SocketException", exception.Diagnostics.RawErrorExcerpt, StringComparison.Ordinal);
+        Assert.Contains("Root=", exception.Diagnostics.RawErrorExcerpt, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RecognizeAsync_reports_overloaded_when_pool_has_no_available_capacity()
     {
         var options = new HttpPdfStampRecognizerOptions
@@ -108,6 +127,104 @@ public sealed class HttpPdfStampRecognizerTests
 
         Assert.Equal(NormalizedProcessorError.ProcessorOverloaded, exception.Error);
         Assert.Null(exception.Diagnostics.Endpoint);
+    }
+
+    [Fact]
+    public async Task Endpoint_pool_metrics_report_active_in_flight_leases()
+    {
+        var options = new HttpPdfStampRecognizerOptions
+        {
+            EndpointPool = new[]
+            {
+                "https://pdf2txt-a.local/recognize_json/",
+                "https://pdf2txt-b.local/recognize_json/"
+            },
+            PoolConcurrencyLimit = 2,
+            EndpointConcurrencyLimit = 1
+        };
+        var pool = new HttpPdfStampRecognizerEndpointPool(options);
+
+        using var lease = await pool.TryAcquireAsync(CancellationToken.None);
+
+        Assert.NotNull(lease);
+        var metrics = pool.GetEndpointMetrics();
+        var active = metrics.Single(metric => metric.Endpoint == lease.Endpoint);
+
+        Assert.Equal(1, active.InFlight);
+        Assert.Equal(1, active.ConcurrencyLimit);
+        Assert.Equal("unknown", active.Health);
+        Assert.All(metrics, metric => Assert.True(metric.Enabled));
+    }
+
+    [Fact]
+    public async Task Endpoint_pool_update_adds_new_endpoint_to_future_leases()
+    {
+        var options = new HttpPdfStampRecognizerOptions
+        {
+            EndpointPool = new[] { "https://pdf2txt-a.local/recognize_json/" },
+            PoolConcurrencyLimit = 2,
+            EndpointConcurrencyLimit = 1
+        };
+        var pool = new HttpPdfStampRecognizerEndpointPool(options);
+
+        using var firstLease = await pool.TryAcquireAsync(CancellationToken.None);
+
+        pool.UpdateEndpoints(new[]
+        {
+            new ProcessorEndpointConfiguration("https://pdf2txt-a.local/recognize_json/", true, 1, "env"),
+            new ProcessorEndpointConfiguration("https://pdf2txt-b.local/recognize_json/", true, 1, "db")
+        });
+
+        using var secondLease = await pool.TryAcquireAsync(CancellationToken.None);
+
+        Assert.NotNull(firstLease);
+        Assert.NotNull(secondLease);
+        Assert.Equal("https://pdf2txt-b.local/recognize_json/", secondLease.Endpoint);
+    }
+
+    [Fact]
+    public async Task Endpoint_pool_update_stops_removed_endpoint_from_getting_new_leases()
+    {
+        var options = new HttpPdfStampRecognizerOptions
+        {
+            EndpointPool = new[]
+            {
+                "https://pdf2txt-a.local/recognize_json/",
+                "https://pdf2txt-b.local/recognize_json/"
+            },
+            PoolConcurrencyLimit = 2,
+            EndpointConcurrencyLimit = 1
+        };
+        var pool = new HttpPdfStampRecognizerEndpointPool(options);
+
+        pool.UpdateEndpoints(new[]
+        {
+            new ProcessorEndpointConfiguration("https://pdf2txt-b.local/recognize_json/", true, 1, "db")
+        });
+
+        using var lease = await pool.TryAcquireAsync(CancellationToken.None);
+
+        Assert.NotNull(lease);
+        Assert.Equal("https://pdf2txt-b.local/recognize_json/", lease.Endpoint);
+    }
+
+    [Fact]
+    public async Task Endpoint_pool_update_releases_in_flight_removed_endpoint_without_negative_counters()
+    {
+        var options = new HttpPdfStampRecognizerOptions
+        {
+            EndpointPool = new[] { "https://pdf2txt-a.local/recognize_json/" },
+            PoolConcurrencyLimit = 1,
+            EndpointConcurrencyLimit = 1
+        };
+        var pool = new HttpPdfStampRecognizerEndpointPool(options);
+
+        var lease = await pool.TryAcquireAsync(CancellationToken.None);
+        pool.UpdateEndpoints(Array.Empty<ProcessorEndpointConfiguration>());
+
+        lease?.Dispose();
+
+        Assert.Empty(pool.GetEndpointMetrics());
     }
 
     private static HttpPdfStampRecognizer CreateRecognizer(HttpMessageHandler handler)

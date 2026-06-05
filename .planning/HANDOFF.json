@@ -1,14 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-03T14:30:00+03:00",
-  "context": "delivery",
-  "phase": "3",
-  "phase_name": "Docker Compose Delivery MVP",
+  "timestamp": "2026-06-05T11:10:00+03:00",
+  "context": "post-mvp",
+  "phase": "post-mvp",
+  "phase_name": "Post-MVP Admin-managed processor endpoints checkpoint",
   "phase_dir": ".planning/phases/001-walking-skeleton-pdf-processing",
-  "status": "docker_compose_real_smoke_complete",
+  "status": "released_v0.1.0_mvp",
   "last_commit": {
-    "hash": "24f212f",
-    "subject": "Fix source audit remediation tails"
+    "hash": "e557142",
+    "subject": "Update Obsidian MVP release notes"
+  },
+  "release_tag": {
+    "name": "v0.1.0-mvp",
+    "target": "e557142"
   },
   "completed_checkpoints": [
     {
@@ -50,12 +54,18 @@
     {
       "name": "Docker Compose real pdf2txt runtime smoke",
       "commit": "documented checkpoint"
+    },
+    {
+      "name": "Admin-managed processor endpoints",
+      "commit": "uncommitted"
     }
   ],
   "remaining_work": [
-    "Create MVP release tag if no further release blockers are identified",
     "PostgresProcessingJobQueue refactor debt",
-    "Admin MVP polish/backlog"
+    "Admin MVP polish/backlog after managed endpoint checkpoint",
+    "Retention cleanup actions",
+    "Production backup/restore automation hardening",
+    "GitHub release notes publication"
   ],
   "verification": {
     "docker_compose_config": "passed with docker compose -p centerales-real-smoke config --quiet",
@@ -77,5 +87,5 @@
     "Admin state-changing endpoints require session cookie and X-CSRF-Token",
     "Do not include raw secrets, input PDF files, temporaryFileKey, or large payloads in diagnostics/audit/support report"
   ],
-  "next_action": "Create the MVP release tag if no further release blockers are identified, then continue with PostgresProcessingJobQueue refactor/Admin MVP polish as post-release backlog."
+  "next_action": "Run full verification for the managed endpoint checkpoint, then choose the next post-MVP backlog item: retry/global processor settings UI, PostgresProcessingJobQueue refactor, retention cleanup planning, backup/restore automation hardening, or GitHub release notes."
 }

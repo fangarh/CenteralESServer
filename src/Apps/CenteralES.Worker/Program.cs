@@ -3,9 +3,11 @@ using CenteralES.Infrastructure.Postgres;
 using CenteralES.Infrastructure.PdfStampRecognition;
 using CenteralES.Infrastructure.Processing;
 using CenteralES.PdfStampRecognition;
+using CenteralES.Processing;
 using CenteralES.Processing.Queue;
 using CenteralES.Processing.Workers;
 using CenteralES.Storage;
+using System.Net;
 using Npgsql;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -34,6 +36,8 @@ builder.Services.AddSingleton<IProcessingJobCommandQueue>(services => services.G
 builder.Services.AddSingleton<IProcessingJobClaimQueue>(services => services.GetRequiredService<PostgresProcessingJobQueue>());
 builder.Services.AddSingleton<IProcessingJobRecoveryQueue>(services => services.GetRequiredService<PostgresProcessingJobQueue>());
 builder.Services.AddSingleton<IWorkerHeartbeatStore, PostgresWorkerHeartbeatStore>();
+builder.Services.AddSingleton<PostgresProcessorEndpointStore>();
+builder.Services.AddSingleton<IProcessorEndpointConfigurationStore>(services => services.GetRequiredService<PostgresProcessorEndpointStore>());
 builder.Services.AddSingleton<IPdfStampRecognitionResultStore, PostgresPdfStampRecognitionResultStore>();
 RegisterPdfStampRecognizer(builder.Services, builder.Configuration, startupLogger);
 builder.Services.AddSingleton<ITemporaryFileStore>(_ => new LocalTemporaryFileStore(temporaryStorageRoot));
@@ -79,7 +83,14 @@ static void RegisterPdfStampRecognizer(
         var options = ResolveHttpPdfStampRecognizerOptions(configuration);
         services.AddSingleton(options);
         services.AddSingleton<HttpPdfStampRecognizerEndpointPool>();
-        services.AddHttpClient(HttpPdfStampRecognizer.HttpClientName);
+        services.AddSingleton<IWorkerEndpointMetricsProvider>(services => services.GetRequiredService<HttpPdfStampRecognizerEndpointPool>());
+        services.AddSingleton<IWorkerEndpointConfigurationRefresher, PdfStampRecognitionEndpointConfigurationRefresher>();
+        var httpClientBuilder = services.AddHttpClient(HttpPdfStampRecognizer.HttpClientName);
+        if (!string.IsNullOrWhiteSpace(options.ProxyUrl) || options.DisableEnvironmentProxy)
+        {
+            httpClientBuilder.ConfigurePrimaryHttpMessageHandler(() => CreateHttpMessageHandler(options));
+        }
+
         services.AddSingleton<IPdfStampRecognizer, HttpPdfStampRecognizer>();
         return;
     }
@@ -106,11 +117,31 @@ static HttpPdfStampRecognizerOptions ResolveHttpPdfStampRecognizerOptions(IConfi
         EndpointPool = endpoints,
         PoolConcurrencyLimit = ReadPositiveInt(section, "poolConcurrencyLimit", 1),
         EndpointConcurrencyLimit = ReadPositiveInt(section, "endpointConcurrencyLimit", 1),
-        Timeout = ReadTimeSpan(section, "timeout", TimeSpan.FromSeconds(30))
+        Timeout = ReadTimeSpan(section, "timeout", TimeSpan.FromSeconds(30)),
+        ProxyUrl = section["proxyUrl"],
+        DisableEnvironmentProxy = ReadBool(section, "disableEnvironmentProxy", false)
     };
     options.Validate();
 
     return options;
+}
+
+static HttpMessageHandler CreateHttpMessageHandler(HttpPdfStampRecognizerOptions options)
+{
+    var handler = new HttpClientHandler();
+    if (!string.IsNullOrWhiteSpace(options.ProxyUrl))
+    {
+        handler.UseProxy = true;
+        handler.Proxy = new WebProxy(options.ProxyUrl);
+        return handler;
+    }
+
+    if (options.DisableEnvironmentProxy)
+    {
+        handler.UseProxy = false;
+    }
+
+    return handler;
 }
 
 static WorkerJobProcessorOptions ResolveWorkerJobProcessorOptions(IConfiguration configuration)

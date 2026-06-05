@@ -32,6 +32,8 @@ const state = {
   apiKeys: [],
   users: [],
   audit: [],
+  processorEndpoints: null,
+  processorEndpointChecks: {},
   auditFilters: {
     action: "",
     targetType: "",
@@ -42,6 +44,9 @@ const state = {
     limit: "50"
   },
   processor: null,
+  processorRealtimeTimer: null,
+  processorRealtimeEnabled: false,
+  processorLastRefreshedAt: null,
   health: null,
   storage: null,
   settings: null,
@@ -169,16 +174,36 @@ function bindForms() {
     renderAuditFilters();
     showAlert("Фильтр аудита применен.");
   });
+
+  document.getElementById("processor-endpoint-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    await apiPost("/api/admin/processors/pdf2txt-http-recognizer/endpoints", {
+      capability: "pdf-stamp-recognition",
+      endpoint: String(form.get("endpoint") || "").trim(),
+      concurrencyLimit: Number.parseInt(form.get("concurrencyLimit"), 10),
+      priority: Number.parseInt(form.get("priority") || "0", 10),
+      comment: form.get("comment") || null
+    });
+    formElement.reset();
+    formElement.querySelector("[name='concurrencyLimit']").value = "1";
+    formElement.querySelector("[name='priority']").value = "0";
+    showAlert("Endpoint добавлен.");
+    await loadProcessorEndpoints();
+    renderProcessorEndpointManagement();
+  });
 }
 
 function bindSessionActions() {
   document.getElementById("refresh-button").addEventListener("click", refreshData);
   document.getElementById("refresh-processor-button").addEventListener("click", async () => {
-    await loadProcessor();
+    await Promise.all([loadProcessor(), loadProcessorEndpoints()]);
     renderProcessorDetails();
     renderOverview();
     showAlert("Состояние обработчика обновлено.");
   });
+  document.getElementById("processor-realtime-toggle").addEventListener("click", toggleProcessorRealtime);
   document.getElementById("refresh-health-button").addEventListener("click", async () => {
     await loadHealth();
     renderHealthDetails();
@@ -294,6 +319,7 @@ async function refreshData() {
       loadJobs(),
       loadResults(),
       loadProcessor(),
+      loadProcessorEndpoints(),
       loadHealth(),
       loadStorage(),
       loadSettings(),
@@ -328,6 +354,63 @@ async function loadResults() {
 
 async function loadProcessor() {
   state.processor = await apiGet("/api/admin/processors/pdf2txt-http-recognizer");
+  state.processorLastRefreshedAt = new Date();
+}
+
+async function loadProcessorEndpoints() {
+  state.processorEndpoints = await apiGet("/api/admin/processors/pdf2txt-http-recognizer/endpoints?capability=pdf-stamp-recognition");
+}
+
+function toggleProcessorRealtime() {
+  if (state.processorRealtimeEnabled) {
+    stopProcessorRealtime();
+    renderProcessorRealtimeStatus();
+    return;
+  }
+
+  startProcessorRealtime();
+}
+
+function startProcessorRealtime() {
+  if (state.processorRealtimeTimer) {
+    clearInterval(state.processorRealtimeTimer);
+  }
+
+  state.processorRealtimeEnabled = true;
+  refreshProcessorRealtime();
+  state.processorRealtimeTimer = window.setInterval(refreshProcessorRealtime, 2000);
+  renderProcessorRealtimeStatus();
+}
+
+function stopProcessorRealtime() {
+  if (state.processorRealtimeTimer) {
+    clearInterval(state.processorRealtimeTimer);
+    state.processorRealtimeTimer = null;
+  }
+
+  state.processorRealtimeEnabled = false;
+}
+
+async function refreshProcessorRealtime() {
+  if (!state.admin || !state.processorRealtimeEnabled) {
+    return;
+  }
+
+  try {
+    await loadProcessor();
+    renderProcessorDetails();
+    renderOverview();
+  } catch (error) {
+    stopProcessorRealtime();
+    renderProcessorRealtimeStatus();
+    if (error.status === 401) {
+      setAuthenticated(false);
+      showAlert("Сессия истекла. Realtime остановлен.", true);
+      return;
+    }
+
+    showAlert(error.message || "Realtime обновление обработчика остановлено.", true);
+  }
 }
 
 async function loadHealth() {
@@ -407,6 +490,7 @@ function renderAll() {
   renderJobDetails();
   renderResultDetails();
   renderProcessorDetails();
+  renderProcessorEndpointManagement();
   renderHealthDetails();
   renderDeliveryDetails();
   renderStorageDetails();
@@ -525,8 +609,182 @@ function renderProcessorDetails() {
     ["Cancelled", queue.cancelled ?? 0]
   ]);
 
+  renderProcessorEndpointDistribution(processor?.endpoints || []);
+  renderProcessorRealtimeStatus();
+  renderProcessorEndpointManagement();
   renderProcessorWorkers(processor?.workers || []);
   renderProcessorDiagnostics(processor?.recentDiagnostics || []);
+}
+
+function renderProcessorRealtimeStatus() {
+  const toggle = document.getElementById("processor-realtime-toggle");
+  const status = document.getElementById("processor-realtime-status");
+  if (!toggle || !status) {
+    return;
+  }
+
+  toggle.textContent = state.processorRealtimeEnabled ? "Realtime on" : "Realtime off";
+  const refreshedAt = state.processorLastRefreshedAt
+    ? new Intl.DateTimeFormat("ru-RU", { timeStyle: "medium" }).format(state.processorLastRefreshedAt)
+    : "нет snapshot";
+  status.textContent = state.processorRealtimeEnabled
+    ? `Realtime включен: обновление каждые 2 секунды, последний snapshot ${refreshedAt}.`
+    : `Realtime выключен, последний snapshot ${refreshedAt}.`;
+}
+
+function renderProcessorEndpointManagement() {
+  const body = document.getElementById("processor-managed-endpoints-body");
+  if (!body) {
+    return;
+  }
+
+  const endpointState = state.processorEndpoints || {};
+  const endpoints = endpointState.endpoints || [];
+  const effective = endpointState.effectiveEndpoints || [];
+  const effectiveByEndpoint = new Map(effective.map(endpoint => [endpoint.endpoint, endpoint]));
+  body.innerHTML = "";
+
+  if (endpoints.length === 0) {
+    appendEmptyRow(body, 8, "Управляемые endpoint-ы не настроены; Worker использует env fallback.");
+    setText("processor-effective-count", "0 effective");
+    return;
+  }
+
+  setText("processor-effective-count", `${effective.length} effective`);
+
+  endpoints.forEach(endpoint => {
+    const effectiveEndpoint = effectiveByEndpoint.get(endpoint.endpoint);
+    const checkKey = getProcessorEndpointCheckKey(endpoint);
+    const check = state.processorEndpointChecks[checkKey];
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td><span class="mono">${escapeHtml(endpoint.endpoint || "Не выбран")}</span></td>
+      <td>${escapeHtml(endpoint.source || "unknown")}</td>
+      <td>${endpoint.enabled ? statusPill("active") : statusPill("disabled")}</td>
+      <td>${endpoint.concurrencyLimit ?? 0}</td>
+      <td>${endpoint.priority ?? 0}</td>
+      <td>${effectiveEndpoint ? "Да" : "Нет"}</td>
+      <td>${formatEndpointCheckResult(check)}</td>
+      <td>${formatDate(endpoint.updatedAt || endpoint.createdAt)}</td>
+      <td></td>
+    `;
+
+    const actions = row.lastElementChild;
+    const checkButton = document.createElement("button");
+    checkButton.className = "secondary-button";
+    checkButton.type = "button";
+    checkButton.textContent = "Проверить";
+    checkButton.addEventListener("click", () => checkProcessorEndpoint(endpoint));
+    actions.appendChild(checkButton);
+
+    if (endpoint.source === "db" && endpoint.id) {
+      const toggleButton = document.createElement("button");
+      toggleButton.className = endpoint.enabled ? "danger-button" : "secondary-button";
+      toggleButton.type = "button";
+      toggleButton.textContent = endpoint.enabled ? "Отключить" : "Включить";
+      toggleButton.addEventListener("click", () => updateProcessorEndpoint(endpoint, { enabled: !endpoint.enabled }));
+      actions.appendChild(toggleButton);
+
+      const capacityInput = document.createElement("input");
+      capacityInput.type = "number";
+      capacityInput.min = "1";
+      capacityInput.max = "1000";
+      capacityInput.value = String(endpoint.concurrencyLimit || 1);
+      capacityInput.className = "compact-number";
+      actions.appendChild(capacityInput);
+
+      const saveButton = document.createElement("button");
+      saveButton.className = "secondary-button";
+      saveButton.type = "button";
+      saveButton.textContent = "Сохранить";
+      saveButton.addEventListener("click", () => updateProcessorEndpoint(endpoint, {
+        concurrencyLimit: Number.parseInt(capacityInput.value, 10)
+      }));
+      actions.appendChild(saveButton);
+    } else {
+      const note = document.createElement("span");
+      note.className = "muted-inline";
+      note.textContent = "Env fallback";
+      actions.appendChild(note);
+    }
+
+    body.appendChild(row);
+  });
+}
+
+function getProcessorEndpointCheckKey(endpoint) {
+  return endpoint?.id || endpoint?.endpoint || "";
+}
+
+function formatEndpointCheckResult(check) {
+  if (!check) {
+    return "Не запускалась";
+  }
+
+  const lines = [
+    statusPill(check.status),
+    `${check.httpStatus ?? "no-http"} · ${formatDuration(check.durationMs)}`,
+    check.responseSizeBytes ? formatBytes(check.responseSizeBytes) : "Нет payload"
+  ];
+  if (check.normalizedError) {
+    lines.push(escapeHtml(check.normalizedError));
+  }
+  if (check.excerpt) {
+    lines.push(`<span class="muted-line">${escapeHtml(check.excerpt)}</span>`);
+  }
+  if (check.nextAllowedAt) {
+    lines.push(`<span class="muted-line">Следующая после ${formatDate(check.nextAllowedAt)}</span>`);
+  }
+
+  return lines.join("<br>");
+}
+
+function renderProcessorEndpointDistribution(endpoints) {
+  const body = document.getElementById("processor-endpoints-body");
+  body.innerHTML = "";
+  if (endpoints.length === 0) {
+    appendEmptyRow(body, 9, "Endpoint pool не настроен или runtime metrics еще пусты.");
+    return;
+  }
+
+  endpoints.forEach(endpoint => {
+    const row = document.createElement("tr");
+    const last = endpoint.lastSeenAt
+      ? `${endpoint.lastHttpStatus ?? "no-http"} ${endpoint.lastNormalizedError || "ok"} at ${formatDate(endpoint.lastSeenAt)}`
+      : "Нет данных";
+    const load = `${endpoint.activeProcessing ?? endpoint.inFlight ?? 0} / ${endpoint.concurrencyLimit ?? 0}`;
+    const utilization = endpoint.utilizationPercent ?? 0;
+    const latency = [
+      `avg ${formatDuration(endpoint.averageDurationMs)}`,
+      `p95 ${formatDuration(endpoint.p95DurationMs)}`,
+      `max ${formatDuration(endpoint.maxDurationMs)}`,
+      `last ${formatDuration(endpoint.lastDurationMs)}`
+    ].join("<br>");
+    row.innerHTML = `
+      <td><span class="mono">${escapeHtml(endpoint.endpoint || "Не выбран")}</span></td>
+      <td>${statusPill(endpoint.runtimeHealth || "unknown")}<br>${endpoint.configured ? "configured" : "observed"} · live ${endpoint.liveWorkerCount ?? 0} · stale ${endpoint.staleWorkerCount ?? 0}</td>
+      <td>
+        <strong>${escapeHtml(load)}</strong>
+        <div class="load-meter"><span style="width: ${Math.max(0, Math.min(100, utilization))}%"></span></div>
+        <span>${utilization}% capacity</span>
+      </td>
+      <td>${latency}</td>
+      <td>${formatRate(endpoint.completedPerMinute)} completed/min</td>
+      <td>${endpoint.recentAttempts ?? 0}</td>
+      <td>${endpoint.completed ?? 0}</td>
+      <td>failed ${endpoint.failed ?? 0}<br>blocked ${endpoint.blocked ?? 0}<br>retryable ${endpoint.retryableFailures ?? 0}</td>
+      <td>${statusPill(endpoint.runtimeHealth || "unknown")} ${escapeHtml(last)}</td>
+    `;
+    body.appendChild(row);
+  });
+}
+
+function formatRate(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "0.0";
+  }
+
+  return value.toFixed(1);
 }
 
 function renderProcessorWorkers(workers) {
@@ -597,7 +855,7 @@ function renderHealthDetails() {
     row.innerHTML = `
       <td>${escapeHtml(translateHealthCheckName(check.name))}</td>
       <td>${statusPill(check.status)}</td>
-      <td>${escapeHtml(describeHealthCheck(check.name, check.status))}</td>
+      <td>${escapeHtml(describeHealthCheck(check.name, check.status, check.detail))}</td>
     `;
     body.appendChild(row);
   });
@@ -848,14 +1106,15 @@ function translateHealthCheckName(name) {
   return map[name] || name || "Неизвестная проверка";
 }
 
-function describeHealthCheck(name, status) {
+function describeHealthCheck(name, status, detail) {
   if (status !== "healthy") {
     const unhealthy = {
       postgres: "Web не может использовать PostgreSQL.",
       processingSchema: "Схема БД неполная или несовместима.",
       temporaryStorage: "Временное хранилище недоступно или заполнено."
     };
-    return unhealthy[name] || "Проверка завершилась проблемой.";
+    const message = unhealthy[name] || "Проверка завершилась проблемой.";
+    return detail ? `${message} Detail: ${detail}.` : message;
   }
 
   const healthy = {
@@ -1249,6 +1508,57 @@ async function retryJob(job) {
   renderAll();
 }
 
+async function updateProcessorEndpoint(endpoint, patch) {
+  if (!endpoint?.id) {
+    return;
+  }
+
+  try {
+    await fetchJson(`/api/admin/processors/pdf2txt-http-recognizer/endpoints/${encodeURIComponent(endpoint.id)}`, {
+      method: "PATCH",
+      headers: { "X-CSRF-Token": state.csrfToken },
+      body: JSON.stringify({
+        ...patch,
+        comment: "admin ui endpoint update"
+      })
+    });
+    showAlert("Endpoint обновлен.");
+    await loadProcessorEndpoints();
+    renderProcessorEndpointManagement();
+  } catch (error) {
+    showAlert(error.message || "Не удалось обновить endpoint.", true);
+  }
+}
+
+async function checkProcessorEndpoint(endpoint) {
+  if (!endpoint) {
+    return;
+  }
+
+  const comment = await confirmAction(
+    "Проверить endpoint",
+    `Будет отправлен настроенный diagnostic PDF в ${endpoint.endpoint}. Действие не создает processing job.`,
+    false
+  );
+  if (comment === null) {
+    return;
+  }
+
+  try {
+    const response = await apiPost("/api/admin/processors/pdf2txt-http-recognizer/endpoint-checks", {
+      capability: "pdf-stamp-recognition",
+      endpointId: endpoint.id || null,
+      endpoint: endpoint.id ? null : endpoint.endpoint,
+      comment: comment || null
+    });
+    state.processorEndpointChecks[getProcessorEndpointCheckKey(endpoint)] = response;
+    renderProcessorEndpointManagement();
+    showAlert("Diagnostic check выполнен.");
+  } catch (error) {
+    showAlert(error.message || "Не удалось выполнить diagnostic check.", true);
+  }
+}
+
 async function disableApiKey(key) {
   const comment = await confirmAction(
     "Отключить ключ API",
@@ -1322,8 +1632,13 @@ function activateTab(tab) {
 }
 
 function setAuthenticated(isAuthenticated) {
+  if (!isAuthenticated) {
+    stopProcessorRealtime();
+  }
+
   document.getElementById("login-panel").hidden = isAuthenticated;
   document.getElementById("admin-content").hidden = !isAuthenticated;
   document.getElementById("logout-button").hidden = !isAuthenticated;
   setText("session-login", isAuthenticated ? state.admin.login : "Не выполнен вход");
+  renderProcessorRealtimeStatus();
 }

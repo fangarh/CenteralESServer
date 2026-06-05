@@ -1,6 +1,6 @@
 (function () {
   function statusPill(status) {
-    const kind = status === "active" || status === "completed" || status === "healthy" ? "ok"
+    const kind = status === "active" || status === "completed" || status === "healthy" || status === "succeeded" ? "ok"
       : status === "disabled" || status === "failed" || status === "blocked" || status === "full" ? "danger"
         : "warn";
     return `<span class="status-pill ${kind}">${escapeHtml(translateStatus(status))}</span>`;
@@ -28,7 +28,9 @@
       completed: "Готово",
       processing: "В работе",
       queued: "В очереди",
-      cancelled: "Отменена"
+      cancelled: "Отменена",
+      succeeded: "Успешно",
+      notConfigured: "Не настроено"
     };
     return map[status] || status || "Нет данных";
   }

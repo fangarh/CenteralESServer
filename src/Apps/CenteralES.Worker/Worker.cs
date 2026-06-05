@@ -6,6 +6,7 @@ namespace CenteralES.Worker;
 
 public sealed class Worker : BackgroundService
 {
+    private static readonly TimeSpan EndpointConfigurationRefreshInterval = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan JobHeartbeatInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(2);
@@ -13,6 +14,8 @@ public sealed class Worker : BackgroundService
     private readonly IProcessingJobClaimQueue _queue;
     private readonly IProcessingJobRecoveryQueue _recoveryQueue;
     private readonly IWorkerHeartbeatStore _heartbeatStore;
+    private readonly IReadOnlyList<IWorkerEndpointMetricsProvider> _endpointMetricsProviders;
+    private readonly IReadOnlyList<IWorkerEndpointConfigurationRefresher> _endpointConfigurationRefreshers;
     private readonly WorkerJobProcessor _processor;
     private readonly WorkerRecoveryOptions _recoveryOptions;
     private readonly string _workerId;
@@ -24,12 +27,16 @@ public sealed class Worker : BackgroundService
         IProcessingJobRecoveryQueue recoveryQueue,
         IWorkerHeartbeatStore heartbeatStore,
         WorkerJobProcessor processor,
+        IEnumerable<IWorkerEndpointMetricsProvider> endpointMetricsProviders,
+        IEnumerable<IWorkerEndpointConfigurationRefresher> endpointConfigurationRefreshers,
         WorkerRecoveryOptions? recoveryOptions = null)
     {
         _logger = logger;
         _queue = queue;
         _recoveryQueue = recoveryQueue;
         _heartbeatStore = heartbeatStore;
+        _endpointMetricsProviders = endpointMetricsProviders.ToArray();
+        _endpointConfigurationRefreshers = endpointConfigurationRefreshers.ToArray();
         _processor = processor;
         _recoveryOptions = recoveryOptions ?? new WorkerRecoveryOptions();
         _recoveryOptions.Validate();
@@ -43,10 +50,17 @@ public sealed class Worker : BackgroundService
 
         var nextHeartbeatAt = DateTimeOffset.MinValue;
         var nextRecoveryAt = DateTimeOffset.MinValue;
+        var nextEndpointConfigurationRefreshAt = DateTimeOffset.MinValue;
 
         while (!stoppingToken.IsCancellationRequested)
         {
             var now = DateTimeOffset.UtcNow;
+            if (now >= nextEndpointConfigurationRefreshAt)
+            {
+                await RefreshEndpointConfigurationsAsync(stoppingToken);
+                nextEndpointConfigurationRefreshAt = now.Add(EndpointConfigurationRefreshInterval);
+            }
+
             if (now >= nextHeartbeatAt)
             {
                 await _heartbeatStore.HeartbeatAsync(
@@ -55,7 +69,8 @@ public sealed class Worker : BackgroundService
                         PdfStampRecognitionConstants.ProcessorKey,
                         PdfStampRecognitionConstants.Capability,
                         _startedAt,
-                        now),
+                        now,
+                        CollectEndpointMetrics()),
                     stoppingToken);
                 _logger.LogInformation("Worker {WorkerId} heartbeat at {HeartbeatAt}.", _workerId, now);
                 nextHeartbeatAt = now.Add(HeartbeatInterval);
@@ -86,6 +101,28 @@ public sealed class Worker : BackgroundService
             }
 
             await ProcessWithJobHeartbeatAsync(job, stoppingToken);
+        }
+    }
+
+    private IReadOnlyList<WorkerEndpointMetric> CollectEndpointMetrics()
+    {
+        return _endpointMetricsProviders
+            .SelectMany(provider => provider.GetEndpointMetrics())
+            .ToArray();
+    }
+
+    private async Task RefreshEndpointConfigurationsAsync(CancellationToken stoppingToken)
+    {
+        foreach (var refresher in _endpointConfigurationRefreshers)
+        {
+            try
+            {
+                await refresher.RefreshAsync(stoppingToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Failed to refresh processor endpoint configuration. Last valid snapshot remains active.");
+            }
         }
     }
 

@@ -132,6 +132,89 @@ internal sealed class MvpHttpTestClient : IDisposable
         return results;
     }
 
+    public async Task<IReadOnlyList<MvpServiceTestResult>> RunPdfStampRecognitionFolderUploadAsync(
+        string apiKeyCredential,
+        string folderPath,
+        string hashAlgorithm,
+        int maxParallelUploads,
+        IProgress<string>? progress,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<MvpServiceTestResult>
+        {
+            await TestHealthEndpointAsync("/health/live", "Web live", cancellationToken),
+            await TestHealthEndpointAsync("/health/ready", "Web ready", cancellationToken)
+        };
+
+        if (string.IsNullOrWhiteSpace(apiKeyCredential) || !IsValidApiKeyCredential(apiKeyCredential))
+        {
+            results.Add(new MvpServiceTestResult(
+                "Public API credential",
+                "FAIL",
+                "Ключ должен быть вставлен целиком в формате keyId.secret."));
+            return results;
+        }
+
+        var files = MvpPdfBatchSelection.ListPdfFiles(folderPath);
+        if (files.Count == 0)
+        {
+            results.Add(new MvpServiceTestResult(
+                "PDF folder",
+                "FAIL",
+                "В выбранной папке нет PDF-файлов верхнего уровня."));
+            return results;
+        }
+
+        var boundedParallelism = Math.Clamp(maxParallelUploads, 1, 16);
+        results.Add(new MvpServiceTestResult(
+            "PDF folder",
+            "PASS",
+            $"Найдено PDF: {files.Count}. Parallel uploads: {boundedParallelism}."));
+
+        var uploadResults = new MvpServiceTestResult[files.Count];
+        var completed = 0;
+        using var semaphore = new SemaphoreSlim(boundedParallelism, boundedParallelism);
+        var tasks = files.Select(async (file, index) =>
+        {
+            await semaphore.WaitAsync(cancellationToken);
+            try
+            {
+                uploadResults[index] = await UploadPdfJobOnlyAsync(
+                    apiKeyCredential.Trim(),
+                    file,
+                    string.IsNullOrWhiteSpace(hashAlgorithm) ? "sha256" : hashAlgorithm.Trim(),
+                    cancellationToken);
+                var done = Interlocked.Increment(ref completed);
+                progress?.Report($"{done}/{files.Count}: {Path.GetFileName(file)} -> {uploadResults[index].Status}");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                uploadResults[index] = new MvpServiceTestResult(
+                    $"Upload {Path.GetFileName(file)}",
+                    "FAIL",
+                    ex.Message);
+                var done = Interlocked.Increment(ref completed);
+                progress?.Report($"{done}/{files.Count}: {Path.GetFileName(file)} -> FAIL");
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+
+        await Task.WhenAll(tasks);
+
+        var failed = uploadResults.Count(result => result.Status == "FAIL");
+        var accepted = uploadResults.Count(result => result.Message.Contains("HTTP 202", StringComparison.Ordinal));
+        var cached = uploadResults.Count(result => result.Message.Contains("HTTP 200", StringComparison.Ordinal));
+        results.Add(new MvpServiceTestResult(
+            "Folder upload summary",
+            failed == 0 ? "PASS" : "WARN",
+            $"accepted={accepted}, cached={cached}, failed={failed}, total={files.Count}"));
+        results.AddRange(uploadResults);
+        return results;
+    }
+
     public void Dispose()
     {
         _httpClient.Dispose();
@@ -257,6 +340,51 @@ internal sealed class MvpHttpTestClient : IDisposable
         results.Add(await PollPdfResultAsync(apiKeyCredential, hashAccepted, cancellationToken));
         results.Add(await GetJobStatusAsync(apiKeyCredential, jobId, "Public final job status", cancellationToken));
         return results;
+    }
+
+    private async Task<MvpServiceTestResult> UploadPdfJobOnlyAsync(
+        string apiKeyCredential,
+        string pdfPath,
+        string hashAlgorithm,
+        CancellationToken cancellationToken)
+    {
+        var uploadPath = $"/api/pdf-stamp-recognition/jobs?hashAlgorithm={Uri.EscapeDataString(hashAlgorithm)}";
+        using var request = new HttpRequestMessage(HttpMethod.Post, uploadPath);
+        request.Headers.Authorization = new AuthenticationHeaderValue("ApiKey", apiKeyCredential.Trim());
+
+        await using var fileStream = File.OpenRead(pdfPath);
+        using var fileContent = new StreamContent(fileStream);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        using var form = new MultipartFormDataContent
+        {
+            { fileContent, "file", Path.GetFileName(pdfPath) }
+        };
+        request.Content = form;
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        using var document = await ReadJsonAsync(response, cancellationToken);
+        var fileName = Path.GetFileName(pdfPath);
+
+        if (response.StatusCode is HttpStatusCode.OK)
+        {
+            return new MvpServiceTestResult(
+                $"Upload {fileName}",
+                "PASS",
+                $"HTTP 200 cached. {ReadResultSummary(document.RootElement)}");
+        }
+
+        if (response.StatusCode is HttpStatusCode.Accepted)
+        {
+            return new MvpServiceTestResult(
+                $"Upload {fileName}",
+                "PASS",
+                $"HTTP 202 accepted. {ReadJobSummary(document.RootElement)}");
+        }
+
+        return new MvpServiceTestResult(
+            $"Upload {fileName}",
+            "FAIL",
+            $"HTTP {(int)response.StatusCode}: {ReadError(document)}");
     }
 
     private async Task<MvpServiceTestResult> GetJobStatusAsync(

@@ -31,4 +31,8 @@
     <ProjectReference Include="..\..\src\Apps\CenteralES.DatabaseMigrator\CenteralES.DatabaseMigrator.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\..\src\Apps\CenteralES.Admin.Bootstrap.WinForms\MvpPdfBatchSelection.cs" Link="MvpPdfBatchSelection.cs" />
+  </ItemGroup>
+
 </Project>

@@ -14,15 +14,19 @@ CenteralESServer — серверная платформа для desktop-при
 
 ### Validated
 
-(Пока нет — реализация ещё не началась.)
+- [x] Первый vertical slice реализован: Public API -> PostgreSQL queue -> Worker -> `pdf2txt` adapter -> result retrieval.
+- [x] Архитектурные границы сохранены: модульный монолит по коду, отдельные Web и Worker процессы.
+- [x] Ограничения соблюдены: .NET 9, PostgreSQL, без Entity Framework, explicit SQL/Npgsql.
+- [x] Операционная основа реализована: retry, diagnostics, health, API keys, Admin UI/API visibility.
+- [x] Фактический контракт текущего `pdf2txt` сервиса проверен и зафиксирован; release smoke прошёл через real `/recognize_json/`.
+- [x] MVP delivery path проверен через Docker Compose и закреплён tag `v0.1.0-mvp`.
 
 ### Active
 
-- [ ] Реализовать первый vertical slice: Public API -> PostgreSQL queue -> Worker -> `pdf2txt` adapter -> result retrieval.
-- [ ] Сохранить архитектурные границы: модульный монолит по коду, отдельные Web и Worker процессы.
-- [ ] Соблюсти ограничения: .NET 9, PostgreSQL, без Entity Framework, Clean Architecture, DDD, TDD.
-- [ ] Обеспечить операционную основу: retry, diagnostics, health, API keys, минимальная админская видимость.
-- [ ] Проверить фактический контракт текущего `pdf2txt` сервиса до финализации adapter contract.
+- [ ] Выбрать post-MVP backlog item: refactor `PostgresProcessingJobQueue` или дальнейшая полировка Admin MVP.
+- [ ] Спланировать retention cleanup/dry-run actions с confirmation, audit и влиянием на manual retry.
+- [ ] Усилить production backup/restore automation после первого MVP release.
+- [ ] Подготовить GitHub release notes, если релиз нужно публиковать наружу.
 
 ### Out of Scope
 
@@ -61,13 +65,13 @@ CenteralESServer — серверная платформа для desktop-при
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Модульный монолит по коду | Меньше инфраструктурной сложности, проще первый релиз | Pending |
-| Web и Worker как разные процессы | Долгая обработка не должна блокировать API и админку | Pending |
-| PostgreSQL-backed queue | PostgreSQL уже нужен, внешний broker не нужен для MVP | Pending |
-| Docker Compose вместо Windows Service | Docker полностью закрывает поставку MVP | Pending |
-| Endpoint pool как часть processor instance | Несколько контейнеров `pdf2txt` являются одним сервисом для распределения нагрузки | Pending |
-| Health без бизнес-обработки файлов | Админка не должна подменять клиента ЭП и дергать processor опасными тестами | Pending |
-| Obsidian как источник истины | GSD-планы должны быть производными от согласованной архитектуры | Pending |
+| Модульный монолит по коду | Меньше инфраструктурной сложности, проще первый релиз | Implemented |
+| Web и Worker как разные процессы | Долгая обработка не должна блокировать API и админку | Implemented |
+| PostgreSQL-backed queue | PostgreSQL уже нужен, внешний broker не нужен для MVP | Implemented |
+| Docker Compose вместо Windows Service | Docker полностью закрывает поставку MVP | Implemented |
+| Endpoint pool как часть processor instance | Несколько контейнеров `pdf2txt` являются одним сервисом для распределения нагрузки | Implemented for MVP |
+| Health без бизнес-обработки файлов | Админка не должна подменять клиента ЭП и дергать processor опасными тестами | Implemented |
+| Obsidian как источник истины | GSD-планы должны быть производными от согласованной архитектуры | Active rule |
 
 ## Evolution
 
@@ -79,4 +83,4 @@ CenteralESServer — серверная платформа для desktop-при
 - фиксировать новые решения в `ESServer` и затем синхронизировать `.planning`.
 
 ---
-*Last updated: 2026-05-31 after GSD initialization from Obsidian notes*
+*Last updated: 2026-06-05 after MVP release plan/fact sync*

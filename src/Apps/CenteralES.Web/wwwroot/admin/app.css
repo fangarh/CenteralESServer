@@ -179,6 +179,11 @@ p {
   color: var(--text);
 }
 
+.compact-number {
+  width: 80px;
+  margin: 0 8px;
+}
+
 .danger-button {
   background: var(--danger);
   color: #ffffff;
@@ -293,6 +298,23 @@ button:focus-visible {
   margin-bottom: 14px;
 }
 
+.compact-header {
+  margin-bottom: 8px;
+}
+
+.muted-line {
+  margin: -4px 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.muted-inline {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .button-row {
   display: flex;
   flex-wrap: wrap;
@@ -322,6 +344,23 @@ button:focus-visible {
 
 .audit-summary-header {
   margin-top: 6px;
+}
+
+.load-meter {
+  width: 100%;
+  min-width: 96px;
+  height: 8px;
+  margin: 6px 0 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-strong);
+}
+
+.load-meter span {
+  display: block;
+  height: 100%;
+  background: var(--primary);
 }
 
 .table-wrap {

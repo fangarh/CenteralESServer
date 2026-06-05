@@ -29,10 +29,14 @@ public sealed class MainForm : Form
     private readonly TextBox _demoBaseUrlTextBox = new();
     private readonly TextBox _demoApiKeyTextBox = new();
     private readonly TextBox _demoPdfPathTextBox = new();
+    private readonly TextBox _demoPdfFolderPathTextBox = new();
     private readonly ComboBox _demoHashAlgorithmComboBox = new();
+    private readonly NumericUpDown _demoFolderParallelismInput = new();
     private readonly TextBox _demoStatusTextBox = new();
     private readonly Button _runDemoButton = new();
     private readonly Button _selectDemoPdfButton = new();
+    private readonly Button _runFolderDemoButton = new();
+    private readonly Button _selectDemoFolderButton = new();
 
     private IReadOnlyList<MvpServiceDescriptor> _services = [];
     private MvpHttpTestClient? _mvpClient;
@@ -228,7 +232,7 @@ public sealed class MainForm : Form
     private TabPage CreatePdfDemoTab()
     {
         var tab = new TabPage("PDF demo");
-        var root = CreateRootLayout(rowCount: 8);
+        var root = CreateRootLayout(rowCount: 10);
 
         root.Controls.Add(new Label
         {
@@ -258,6 +262,7 @@ public sealed class MainForm : Form
         root.Controls.Add(CreateLabeledControl("Hash algorithm", _demoHashAlgorithmComboBox));
 
         root.Controls.Add(CreateDemoPdfPicker());
+        root.Controls.Add(CreateDemoFolderPicker());
 
         var buttons = new FlowLayoutPanel
         {
@@ -271,11 +276,19 @@ public sealed class MainForm : Form
         _runDemoButton.AutoSize = true;
         _runDemoButton.Click += async (_, _) => await RunOperationAsync(RunPdfDemoAsync, WriteDemoStatus);
         buttons.Controls.Add(_runDemoButton);
+
+        _runFolderDemoButton.Text = "Отправить папку";
+        _runFolderDemoButton.AutoSize = true;
+        _runFolderDemoButton.Click += async (_, _) => await RunOperationAsync(
+            RunPdfFolderDemoAsync,
+            WriteDemoStatus,
+            TimeSpan.FromMinutes(10));
+        buttons.Controls.Add(_runFolderDemoButton);
         root.Controls.Add(buttons);
 
         ConfigureStatusTextBox(
             _demoStatusTextBox,
-            "Готово. Вставьте Public API key, выберите PDF и запустите demo.");
+            "Готово. Вставьте Public API key, выберите PDF или папку и запустите demo.");
         root.Controls.Add(_demoStatusTextBox);
 
         tab.Controls.Add(root);
@@ -325,6 +338,37 @@ public sealed class MainForm : Form
         return panel;
     }
 
+    private Control CreateDemoFolderPicker()
+    {
+        var panel = new TableLayoutPanel
+        {
+            AutoSize = true,
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            Margin = new Padding(0, 0, 0, 10)
+        };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        _demoPdfFolderPathTextBox.PlaceholderText = "Папка с PDF-файлами для batch upload";
+        panel.Controls.Add(CreateLabeledControl("PDF folder", _demoPdfFolderPathTextBox), 0, 0);
+
+        _demoFolderParallelismInput.Minimum = 1;
+        _demoFolderParallelismInput.Maximum = 16;
+        _demoFolderParallelismInput.Value = 4;
+        _demoFolderParallelismInput.Width = 80;
+        panel.Controls.Add(CreateLabeledControl("Parallel", _demoFolderParallelismInput), 1, 0);
+
+        _selectDemoFolderButton.Text = "Выбрать папку";
+        _selectDemoFolderButton.AutoSize = true;
+        _selectDemoFolderButton.Margin = new Padding(8, 20, 0, 0);
+        _selectDemoFolderButton.Click += (_, _) => SelectPdfFolder();
+        panel.Controls.Add(_selectDemoFolderButton, 2, 0);
+
+        return panel;
+    }
+
     private static Control CreateLabeledControl(string labelText, Control control)
     {
         var panel = new TableLayoutPanel
@@ -360,9 +404,10 @@ public sealed class MainForm : Form
 
     private async Task RunOperationAsync(
         Func<CancellationToken, Task> operation,
-        Action<string> writeStatus)
+        Action<string> writeStatus,
+        TimeSpan? timeout = null)
     {
-        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        using var cancellationTokenSource = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(90));
         SetBusy(true);
         try
         {
@@ -512,6 +557,39 @@ public sealed class MainForm : Form
         WriteDemoStatus(string.Join(Environment.NewLine, lines));
     }
 
+    private async Task RunPdfFolderDemoAsync(CancellationToken cancellationToken)
+    {
+        using var client = new MvpHttpTestClient(ResolveDemoBaseUri());
+        var progressLines = new List<string>();
+        var progress = new Progress<string>(message =>
+        {
+            progressLines.Add(message);
+            if (progressLines.Count > 20)
+            {
+                progressLines.RemoveAt(0);
+            }
+
+            WriteDemoStatus(string.Join(Environment.NewLine, progressLines));
+        });
+
+        var results = await client.RunPdfStampRecognitionFolderUploadAsync(
+            _demoApiKeyTextBox.Text,
+            _demoPdfFolderPathTextBox.Text,
+            _demoHashAlgorithmComboBox.SelectedItem?.ToString() ?? "sha256",
+            (int)_demoFolderParallelismInput.Value,
+            progress,
+            cancellationToken);
+
+        var lines = new List<string>
+        {
+            "Batch: pdf-stamp-recognition folder upload",
+            $"Hash algorithm: {_demoHashAlgorithmComboBox.SelectedItem ?? "sha256"}",
+            $"Folder: {_demoPdfFolderPathTextBox.Text}"
+        };
+        lines.AddRange(results.Select(result => result.ToString()));
+        WriteDemoStatus(string.Join(Environment.NewLine, lines));
+    }
+
     private async Task<MvpServiceDescriptor> GetSelectedOrFirstServiceAsync(CancellationToken cancellationToken)
     {
         if (_services.Count == 0)
@@ -610,6 +688,21 @@ public sealed class MainForm : Form
         }
     }
 
+    private void SelectPdfFolder()
+    {
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "Выберите папку с PDF для batch upload",
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = false
+        };
+
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            _demoPdfFolderPathTextBox.Text = dialog.SelectedPath;
+        }
+    }
+
     private void SetBusy(bool busy)
     {
         foreach (var button in new[]
@@ -622,7 +715,9 @@ public sealed class MainForm : Form
             _testSelectedServiceButton,
             _testAllServicesButton,
             _runDemoButton,
-            _selectDemoPdfButton
+            _runFolderDemoButton,
+            _selectDemoPdfButton,
+            _selectDemoFolderButton
         })
         {
             button.Enabled = !busy;

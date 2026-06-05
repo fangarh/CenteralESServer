@@ -10,7 +10,8 @@ internal sealed record ReadyHealthResponse(
 
 internal sealed record HealthCheckItemResponse(
     string Name,
-    string Status);
+    string Status,
+    string? Detail = null);
 
 internal sealed record PdfJobResponse(
     string Hash,
@@ -410,6 +411,7 @@ internal sealed record AdminProcessorStatusResponse(
     string Health,
     AdminProcessorQueueCountsResponse Queue,
     IReadOnlyList<AdminProcessorWorkerStatusResponse> Workers,
+    IReadOnlyList<AdminProcessorEndpointDistributionResponse> Endpoints,
     IReadOnlyList<AdminProcessorRecentDiagnosticResponse> RecentDiagnostics);
 
 internal sealed record AdminProcessorQueueCountsResponse(
@@ -427,6 +429,31 @@ internal sealed record AdminProcessorWorkerStatusResponse(
     DateTimeOffset HeartbeatAt,
     bool Stale);
 
+internal sealed record AdminProcessorEndpointDistributionResponse(
+    string Endpoint,
+    bool Configured,
+    int RecentAttempts,
+    int Completed,
+    int Failed,
+    int Blocked,
+    int RetryableFailures,
+    int ActiveProcessing,
+    int UtilizationPercent,
+    double? AverageDurationMs,
+    double? P95DurationMs,
+    double? MaxDurationMs,
+    double? LastDurationMs,
+    double CompletedPerMinute,
+    int LiveWorkerCount,
+    int StaleWorkerCount,
+    int InFlight,
+    int ConcurrencyLimit,
+    string RuntimeHealth,
+    DateTimeOffset? LastHeartbeatAt,
+    int? LastHttpStatus,
+    string? LastNormalizedError,
+    DateTimeOffset? LastSeenAt);
+
 internal sealed record AdminProcessorRecentDiagnosticResponse(
     string JobId,
     int AttemptNumber,
@@ -437,3 +464,56 @@ internal sealed record AdminProcessorRecentDiagnosticResponse(
     bool? Retryable,
     string CorrelationId,
     DateTimeOffset CreatedAt);
+
+internal sealed record AdminProcessorEndpointListResponse(
+    IReadOnlyList<AdminProcessorEndpointResponse> Endpoints,
+    IReadOnlyList<AdminProcessorEffectiveEndpointResponse> EffectiveEndpoints);
+
+internal sealed record AdminProcessorEndpointResponse(
+    string? Id,
+    string ProcessorKey,
+    string Capability,
+    string Endpoint,
+    bool Enabled,
+    int ConcurrencyLimit,
+    int Priority,
+    string Source,
+    DateTimeOffset? CreatedAt,
+    DateTimeOffset? UpdatedAt,
+    DateTimeOffset? DisabledAt);
+
+internal sealed record AdminProcessorEffectiveEndpointResponse(
+    string Endpoint,
+    int ConcurrencyLimit,
+    string Source);
+
+internal sealed record AdminCreateProcessorEndpointRequestBody(
+    string? Capability,
+    string? Endpoint,
+    int? ConcurrencyLimit,
+    int? Priority,
+    string? Comment);
+
+internal sealed record AdminUpdateProcessorEndpointRequestBody(
+    bool? Enabled,
+    int? ConcurrencyLimit,
+    int? Priority,
+    string? Comment);
+
+internal sealed record AdminProcessorEndpointCheckRequestBody(
+    string? Capability,
+    string? EndpointId,
+    string? Endpoint,
+    string? Comment);
+
+internal sealed record AdminProcessorEndpointCheckResponse(
+    string Status,
+    string Endpoint,
+    DateTimeOffset CheckedAt,
+    double? DurationMs,
+    int? HttpStatus,
+    string? NormalizedError,
+    bool? Retryable,
+    long? ResponseSizeBytes,
+    string? Excerpt,
+    DateTimeOffset? NextAllowedAt);

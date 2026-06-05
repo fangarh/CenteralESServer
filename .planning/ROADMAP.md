@@ -1,6 +1,6 @@
 # Roadmap: CenteralESServer MVP
 
-**Created:** 2026-05-31  
+**Created:** 2026-05-31
 **Source of truth:** `ESServer` Obsidian notes
 
 ## Milestone 1: Operational PDF Recognition MVP
@@ -9,8 +9,8 @@
 
 ### Phase 1: Walking Skeleton PDF Processing
 
-**Mode:** mvp  
-**Status:** Backend checkpoint complete  
+**Mode:** mvp
+**Status:** Complete
 **Plan:** `.planning/phases/001-walking-skeleton-pdf-processing/PLAN.md`
 
 Сквозной slice:
@@ -34,23 +34,23 @@ Scope:
 
 ### Phase 2: Security, Retry, Health, Admin Actions
 
-**Status:** In Progress
+**Status:** Complete
 
 Scope:
 
-- API key model and auth middleware; baseline implemented, admin creation/rotation UI remains later in Phase 2/4;
-- admin login/session/CSRF baseline; backend baseline implemented, first-admin WinForms bootstrap app implemented and covered by backend smoke, broader UI/audit work continues in Phase 2/4;
-- read-only Admin Services registry endpoint implemented for the registered MVP service; WinForms test client discovers and tests services through this registry plus existing Admin/Public API endpoints.
-- manual retry одной задачи; backend endpoint implemented, UI remains Phase 4;
-- audit для admin actions; current MVP dangerous actions and filtered Audit UI implemented;
-- health live/ready и Worker heartbeat; baseline already implemented in Phase 1, remaining work is hardening/admin visibility;
-- temporary storage hard/soft limit behavior; backend hard-limit block implemented, Admin UI warning and read-only retention visibility implemented;
-- blocked/final failure handling;
-- support report MVP; backend endpoint implemented, UI/export button remains Phase 4.
+- API key model, hashed secret storage, auth middleware, allowed capabilities, Admin create/list/disable backend and UI implemented;
+- admin login/session/CSRF baseline implemented; first-admin WinForms bootstrap app implemented and covered by backend smoke;
+- read-only Admin Services registry endpoint implemented for the registered MVP service; WinForms test client discovers and tests services through this registry plus existing Admin/Public API endpoints;
+- manual retry одной failed/blocked задачи implemented in backend and Admin UI;
+- audit для MVP admin actions implemented, including manual retry, API keys, admin users, bootstrap and filtered Audit UI with safe details;
+- health live/ready, Worker heartbeat, job heartbeat, stale-processing recovery and Admin Health screen implemented without invoking external `pdf2txt`;
+- temporary storage hard/min-free guard implemented; Admin Storage/Settings show read-only capacity and retention visibility;
+- blocked/final failure handling implemented;
+- support report MVP implemented in backend and exposed as Admin Job Details JSON download.
 
 ### Phase 3: Docker Compose Delivery MVP
 
-**Status:** Release gate complete
+**Status:** Released as `v0.1.0-mvp`
 
 Scope:
 
@@ -61,23 +61,24 @@ Scope:
 - migration/bootstrap process без EF implemented; explicit SQL runner and one-shot DatabaseMigrator run before Web/Worker;
 - smoke tests для локальной поставки passed on 2026-06-03 with real `Http` recognizer: Public upload -> Worker -> external `pdf2txt` `/recognize_json/` -> completed result polling.
 - production-like delivery workflow added after smoke: `compose.prod.yaml`, `.env.production.example`, `scripts/run-release-smoke.ps1`, and `docs/RELEASE_RUNBOOK.md`.
-- release artifacts verified with Compose config/build and full .NET build/test; scripted release smoke passed with an Admin API-created Public API key.
+- release artifacts verified with Compose config/build and full .NET build/test; scripted release smoke passed with an Admin API-created Public API key;
+- local annotated tag `v0.1.0-mvp` created after release gate.
 
 ### Phase 4: Admin MVP Completion
 
-**Status:** Pending
+**Status:** Post-MVP backlog
 
 Scope:
 
-- Dashboard как рабочая консоль;
-- Processors/Processor Details;
-- Results/Result Details read-only baseline, safe PDF summary, and controlled raw JSON debug download done;
-- API Keys UI;
-- Storage screen read-only baseline and retention policy visibility done; cleanup/dry-run/delete actions remain later;
-- Health screen;
-- Audit screen baseline done with filters and safe details;
-- Admin Users;
-- Settings read-only baseline done; editing remains later.
+- Dashboard, Jobs/Job Details, single-job retry and support report download implemented for MVP;
+- Processor Details passive health, queue counts, worker heartbeats, recent diagnostics, and DB-managed endpoint add/enable/disable/per-endpoint concurrency editing implemented; retry policy and global pool settings remain post-MVP;
+- Results/Result Details read-only baseline, safe PDF summary and controlled raw JSON debug download implemented;
+- API Keys UI implemented for create/list/disable; dedicated rotate endpoint remains post-MVP;
+- Storage screen read-only baseline and retention policy visibility implemented; cleanup/dry-run/delete actions remain post-MVP;
+- Health screen implemented;
+- Audit screen baseline implemented with filters and safe details;
+- Admin Users UI implemented for create/password/disable;
+- Settings read-only baseline implemented; editing remains post-MVP.
 
 ## Deferred
 
@@ -88,6 +89,9 @@ Scope:
 - multi-tenant;
 - processor creation через UI;
 - retention policy UI;
+- retention cleanup actions;
+- production backup/restore automation hardening;
+- GitHub release notes publication;
 - analytics;
 - batch export больших payload.
 
@@ -98,4 +102,4 @@ Scope:
 - Phase plans should keep vertical slices working end-to-end.
 
 ---
-*Last updated: 2026-06-03 after scripted release smoke*
+*Last updated: 2026-06-05 after Admin-managed processor endpoints checkpoint*
